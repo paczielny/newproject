@@ -1559,54 +1559,6 @@ void ProtocolGame::GetMapDescription(int32_t x, int32_t y, int32_t z, int32_t wi
 	}
 }
 
-
-uint64_t ProtocolGame::buildHighlightPositionKey(const Position &pos) const {
-	return (static_cast<uint64_t>(pos.z) << 32) | (static_cast<uint64_t>(pos.y) << 16) | pos.x;
-}
-
-void ProtocolGame::collectLootHighlightsFromFloor(int32_t x, int32_t y, int32_t z, int32_t width, int32_t height, int32_t offset, HighlightPositionSet &processedPositions, std::vector<Position> &positions) {
-	if (!player) {
-		return;
-	}
-
-	for (int32_t nx = 0; nx < width; ++nx) {
-		for (int32_t ny = 0; ny < height; ++ny) {
-			Position position(static_cast<uint16_t>(x + nx + offset), static_cast<uint16_t>(y + ny + offset), static_cast<uint8_t>(z));
-			const auto key = buildHighlightPositionKey(position);
-			if (!processedPositions.insert(key).second) {
-				continue;
-			}
-
-			const auto &tile = g_game().map.getTile(position);
-			if (!tile || !g_game().hasVisibleLootHighlightForPlayer(player, tile)) {
-				continue;
-			}
-
-			positions.emplace_back(position);
-		}
-	}
-}
-
-void ProtocolGame::collectLootHighlightsFromDescription(int32_t x, int32_t y, int32_t z, int32_t width, int32_t height, HighlightPositionSet &processedPositions, std::vector<Position> &positions) {
-	int32_t startz;
-	int32_t endz;
-	int32_t zstep;
-
-	if (z > MAP_INIT_SURFACE_LAYER) {
-		startz = z - MAP_LAYER_VIEW_LIMIT;
-		endz = std::min<int32_t>(MAP_MAX_LAYERS - 1, z + MAP_LAYER_VIEW_LIMIT);
-		zstep = 1;
-	} else {
-		startz = MAP_INIT_SURFACE_LAYER;
-		endz = 0;
-		zstep = -1;
-	}
-
-	for (int32_t nz = startz; nz != endz + zstep; nz += zstep) {
-		collectLootHighlightsFromFloor(x, y, nz, width, height, z - nz, processedPositions, positions);
-	}
-}
-
 void ProtocolGame::GetFloorDescription(NetworkMessage &msg, int32_t x, int32_t y, int32_t z, int32_t width, int32_t height, int32_t offset, int32_t &skip) {
 	for (int32_t nx = 0; nx < width; nx++) {
 		for (int32_t ny = 0; ny < height; ny++) {
@@ -6979,20 +6931,8 @@ void ProtocolGame::sendMapDescription(const Position &pos) {
 	NetworkMessage msg;
 	msg.addByte(0x64);
 	msg.addPosition(player->getPosition());
-	const int32_t fromX = pos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-	const int32_t fromY = pos.y - MAP_MAX_CLIENT_VIEW_PORT_Y;
-	const int32_t width = (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2;
-	const int32_t height = (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2;
-	GetMapDescription(fromX, fromY, pos.z, width, height, msg);
+	GetMapDescription(pos.x - MAP_MAX_CLIENT_VIEW_PORT_X, pos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, pos.z, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, msg);
 	writeToOutputBuffer(msg);
-
-	HighlightPositionSet processedPositions;
-	std::vector<Position> highlightPositions;
-	collectLootHighlightsFromDescription(fromX, fromY, pos.z, width, height, processedPositions, highlightPositions);
-	for (const auto &position : highlightPositions) {
-		removeMagicEffect(position, CONST_ME_LOOT_HIGHLIGHT);
-		sendMagicEffect(position, CONST_ME_LOOT_HIGHLIGHT);
-	}
 }
 
 void ProtocolGame::sendAddTileItem(const Position &pos, uint32_t stackpos, const std::shared_ptr<Item> &item) {
@@ -7271,8 +7211,6 @@ void ProtocolGame::sendMoveCreature(const std::shared_ptr<Creature> &creature, c
 			writeToOutputBuffer(msg);
 			sendMapDescription(newPos);
 		} else {
-			HighlightPositionSet processedPositions;
-			std::vector<Position> highlightPositions;
 			NetworkMessage msg;
 			if (oldPos.z == MAP_INIT_SURFACE_LAYER && newPos.z >= MAP_INIT_SURFACE_LAYER + 1) {
 				RemoveTileThing(msg, oldPos, oldStackPos);
@@ -7284,52 +7222,27 @@ void ProtocolGame::sendMoveCreature(const std::shared_ptr<Creature> &creature, c
 			}
 
 			if (newPos.z > oldPos.z) {
-				MoveDownCreature(msg, creature, newPos, oldPos, processedPositions, highlightPositions);
+				MoveDownCreature(msg, creature, newPos, oldPos);
 			} else if (newPos.z < oldPos.z) {
-				MoveUpCreature(msg, creature, newPos, oldPos, processedPositions, highlightPositions);
+				MoveUpCreature(msg, creature, newPos, oldPos);
 			}
 
 			if (oldPos.y > newPos.y) { // north, for old x
 				msg.addByte(0x65);
-				const int32_t areaX = oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-				const int32_t areaY = newPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y;
-				const int32_t areaWidth = (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2;
-				const int32_t areaHeight = 1;
-				GetMapDescription(areaX, areaY, newPos.z, areaWidth, areaHeight, msg);
-				collectLootHighlightsFromDescription(areaX, areaY, newPos.z, areaWidth, areaHeight, processedPositions, highlightPositions);
+				GetMapDescription(oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, newPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, newPos.z, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, 1, msg);
 			} else if (oldPos.y < newPos.y) { // south, for old x
 				msg.addByte(0x67);
-				const int32_t areaX = oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-				const int32_t areaY = newPos.y + (MAP_MAX_CLIENT_VIEW_PORT_Y + 1);
-				const int32_t areaWidth = (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2;
-				const int32_t areaHeight = 1;
-				GetMapDescription(areaX, areaY, newPos.z, areaWidth, areaHeight, msg);
-				collectLootHighlightsFromDescription(areaX, areaY, newPos.z, areaWidth, areaHeight, processedPositions, highlightPositions);
+				GetMapDescription(oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, newPos.y + (MAP_MAX_CLIENT_VIEW_PORT_Y + 1), newPos.z, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, 1, msg);
 			}
 
 			if (oldPos.x < newPos.x) { // east, [with new y]
 				msg.addByte(0x66);
-				const int32_t areaX = newPos.x + (MAP_MAX_CLIENT_VIEW_PORT_X + 1);
-				const int32_t areaY = newPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y;
-				const int32_t areaWidth = 1;
-				const int32_t areaHeight = (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2;
-				GetMapDescription(areaX, areaY, newPos.z, areaWidth, areaHeight, msg);
-				collectLootHighlightsFromDescription(areaX, areaY, newPos.z, areaWidth, areaHeight, processedPositions, highlightPositions);
+				GetMapDescription(newPos.x + (MAP_MAX_CLIENT_VIEW_PORT_X + 1), newPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, newPos.z, 1, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, msg);
 			} else if (oldPos.x > newPos.x) { // west, [with new y]
 				msg.addByte(0x68);
-				const int32_t areaX = newPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-				const int32_t areaY = newPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y;
-				const int32_t areaWidth = 1;
-				const int32_t areaHeight = (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2;
-				GetMapDescription(areaX, areaY, newPos.z, areaWidth, areaHeight, msg);
-				collectLootHighlightsFromDescription(areaX, areaY, newPos.z, areaWidth, areaHeight, processedPositions, highlightPositions);
+				GetMapDescription(newPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, newPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, newPos.z, 1, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, msg);
 			}
 			writeToOutputBuffer(msg);
-
-			for (const auto &position : highlightPositions) {
-				removeMagicEffect(position, CONST_ME_LOOT_HIGHLIGHT);
-				sendMagicEffect(position, CONST_ME_LOOT_HIGHLIGHT);
-			}
 		}
 	} else if (canSee(oldPos) && canSee(newPos)) {
 		if (teleport || (oldPos.z == MAP_INIT_SURFACE_LAYER && newPos.z >= MAP_INIT_SURFACE_LAYER + 1) || oldStackPos >= 10) {
@@ -8788,7 +8701,7 @@ void ProtocolGame::sendTaskHuntingData(const std::unique_ptr<TaskHuntingSlot> &s
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::MoveUpCreature(NetworkMessage &msg, const std::shared_ptr<Creature> &creature, const Position &newPos, const Position &oldPos, HighlightPositionSet &processedPositions, std::vector<Position> &highlightPositions) {
+void ProtocolGame::MoveUpCreature(NetworkMessage &msg, const std::shared_ptr<Creature> &creature, const Position &newPos, const Position &oldPos) {
 	if (creature != player) {
 		return;
 	}
@@ -8799,22 +8712,12 @@ void ProtocolGame::MoveUpCreature(NetworkMessage &msg, const std::shared_ptr<Cre
 	// going to surface
 	if (newPos.z == MAP_INIT_SURFACE_LAYER) {
 		int32_t skip = -1;
-		const int32_t baseX = oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-		const int32_t baseY = oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y;
-		const int32_t viewWidth = (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2;
-		const int32_t viewHeight = (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2;
-		GetFloorDescription(msg, baseX, baseY, 5, viewWidth, viewHeight, 3, skip); //(floor 7 and 6 already set)
-		collectLootHighlightsFromFloor(baseX, baseY, 5, viewWidth, viewHeight, 3, processedPositions, highlightPositions);
-		GetFloorDescription(msg, baseX, baseY, 4, viewWidth, viewHeight, 4, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, 4, viewWidth, viewHeight, 4, processedPositions, highlightPositions);
-		GetFloorDescription(msg, baseX, baseY, 3, viewWidth, viewHeight, 5, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, 3, viewWidth, viewHeight, 5, processedPositions, highlightPositions);
-		GetFloorDescription(msg, baseX, baseY, 2, viewWidth, viewHeight, 6, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, 2, viewWidth, viewHeight, 6, processedPositions, highlightPositions);
-		GetFloorDescription(msg, baseX, baseY, 1, viewWidth, viewHeight, 7, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, 1, viewWidth, viewHeight, 7, processedPositions, highlightPositions);
-		GetFloorDescription(msg, baseX, baseY, 0, viewWidth, viewHeight, 8, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, 0, viewWidth, viewHeight, 8, processedPositions, highlightPositions);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, 5, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, 3, skip); //(floor 7 and 6 already set)
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, 4, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, 4, skip);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, 3, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, 5, skip);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, 2, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, 6, skip);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, 1, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, 7, skip);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, 0, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, 8, skip);
 
 		if (skip >= 0) {
 			msg.addByte(skip);
@@ -8824,12 +8727,7 @@ void ProtocolGame::MoveUpCreature(NetworkMessage &msg, const std::shared_ptr<Cre
 	// underground, going one floor up (still underground)
 	else if (newPos.z > MAP_INIT_SURFACE_LAYER) {
 		int32_t skip = -1;
-		const int32_t baseX = oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-		const int32_t baseY = oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y;
-		const int32_t viewWidth = (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2;
-		const int32_t viewHeight = (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2;
-		GetFloorDescription(msg, baseX, baseY, oldPos.getZ() - 3, viewWidth, viewHeight, 3, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, oldPos.getZ() - 3, viewWidth, viewHeight, 3, processedPositions, highlightPositions);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, oldPos.getZ() - 3, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, 3, skip);
 
 		if (skip >= 0) {
 			msg.addByte(skip);
@@ -8840,22 +8738,14 @@ void ProtocolGame::MoveUpCreature(NetworkMessage &msg, const std::shared_ptr<Cre
 	// moving up a floor up makes us out of sync
 	// west
 	msg.addByte(0x68);
-	const int32_t westX = oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-	const int32_t westY = oldPos.y - (MAP_MAX_CLIENT_VIEW_PORT_Y - 1);
-	const int32_t viewHeight = (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2;
-	GetMapDescription(westX, westY, newPos.z, 1, viewHeight, msg);
-	collectLootHighlightsFromDescription(westX, westY, newPos.z, 1, viewHeight, processedPositions, highlightPositions);
+	GetMapDescription(oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - (MAP_MAX_CLIENT_VIEW_PORT_Y - 1), newPos.z, 1, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, msg);
 
 	// north
 	msg.addByte(0x65);
-	const int32_t northX = oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-	const int32_t northY = oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y;
-	const int32_t viewWidth = (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2;
-	GetMapDescription(northX, northY, newPos.z, viewWidth, 1, msg);
-	collectLootHighlightsFromDescription(northX, northY, newPos.z, viewWidth, 1, processedPositions, highlightPositions);
+	GetMapDescription(oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, newPos.z, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, 1, msg);
 }
 
-void ProtocolGame::MoveDownCreature(NetworkMessage &msg, const std::shared_ptr<Creature> &creature, const Position &newPos, const Position &oldPos, HighlightPositionSet &processedPositions, std::vector<Position> &highlightPositions) {
+void ProtocolGame::MoveDownCreature(NetworkMessage &msg, const std::shared_ptr<Creature> &creature, const Position &newPos, const Position &oldPos) {
 	if (creature != player) {
 		return;
 	}
@@ -8867,17 +8757,9 @@ void ProtocolGame::MoveDownCreature(NetworkMessage &msg, const std::shared_ptr<C
 	if (newPos.z == MAP_INIT_SURFACE_LAYER + 1) {
 		int32_t skip = -1;
 
-		const int32_t baseX = oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-		const int32_t baseY = oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y;
-		const int32_t viewWidth = (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2;
-		const int32_t viewHeight = (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2;
-
-		GetFloorDescription(msg, baseX, baseY, newPos.z, viewWidth, viewHeight, -1, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, newPos.z, viewWidth, viewHeight, -1, processedPositions, highlightPositions);
-		GetFloorDescription(msg, baseX, baseY, newPos.z + 1, viewWidth, viewHeight, -2, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, newPos.z + 1, viewWidth, viewHeight, -2, processedPositions, highlightPositions);
-		GetFloorDescription(msg, baseX, baseY, newPos.z + 2, viewWidth, viewHeight, -3, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, newPos.z + 2, viewWidth, viewHeight, -3, processedPositions, highlightPositions);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, newPos.z, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, -1, skip);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, newPos.z + 1, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, -2, skip);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, newPos.z + 2, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, -3, skip);
 
 		if (skip >= 0) {
 			msg.addByte(skip);
@@ -8887,12 +8769,7 @@ void ProtocolGame::MoveDownCreature(NetworkMessage &msg, const std::shared_ptr<C
 	// going further down
 	else if (newPos.z > oldPos.z && newPos.z > MAP_INIT_SURFACE_LAYER + 1 && newPos.z < MAP_MAX_LAYERS - MAP_LAYER_VIEW_LIMIT) {
 		int32_t skip = -1;
-		const int32_t baseX = oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-		const int32_t baseY = oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y;
-		const int32_t viewWidth = (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2;
-		const int32_t viewHeight = (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2;
-		GetFloorDescription(msg, baseX, baseY, newPos.z + MAP_LAYER_VIEW_LIMIT, viewWidth, viewHeight, -3, skip);
-		collectLootHighlightsFromFloor(baseX, baseY, newPos.z + MAP_LAYER_VIEW_LIMIT, viewWidth, viewHeight, -3, processedPositions, highlightPositions);
+		GetFloorDescription(msg, oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y - MAP_MAX_CLIENT_VIEW_PORT_Y, newPos.z + MAP_LAYER_VIEW_LIMIT, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, -3, skip);
 
 		if (skip >= 0) {
 			msg.addByte(skip);
@@ -8903,19 +8780,11 @@ void ProtocolGame::MoveDownCreature(NetworkMessage &msg, const std::shared_ptr<C
 	// moving down a floor makes us out of sync
 	// east
 	msg.addByte(0x66);
-	const int32_t eastX = oldPos.x + MAP_MAX_CLIENT_VIEW_PORT_X + 1;
-	const int32_t eastY = oldPos.y - (MAP_MAX_CLIENT_VIEW_PORT_Y + 1);
-	const int32_t viewHeight = (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2;
-	GetMapDescription(eastX, eastY, newPos.z, 1, viewHeight, msg);
-	collectLootHighlightsFromDescription(eastX, eastY, newPos.z, 1, viewHeight, processedPositions, highlightPositions);
+	GetMapDescription(oldPos.x + MAP_MAX_CLIENT_VIEW_PORT_X + 1, oldPos.y - (MAP_MAX_CLIENT_VIEW_PORT_Y + 1), newPos.z, 1, ((MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2), msg);
 
 	// south
 	msg.addByte(0x67);
-	const int32_t southX = oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X;
-	const int32_t southY = oldPos.y + (MAP_MAX_CLIENT_VIEW_PORT_Y + 1);
-	const int32_t viewWidth = (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2;
-	GetMapDescription(southX, southY, newPos.z, viewWidth, 1, msg);
-	collectLootHighlightsFromDescription(southX, southY, newPos.z, viewWidth, 1, processedPositions, highlightPositions);
+	GetMapDescription(oldPos.x - MAP_MAX_CLIENT_VIEW_PORT_X, oldPos.y + (MAP_MAX_CLIENT_VIEW_PORT_Y + 1), newPos.z, ((MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2), 1, msg);
 }
 
 void ProtocolGame::AddHiddenShopItem(NetworkMessage &msg) {
