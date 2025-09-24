@@ -325,6 +325,22 @@ std::vector<ContainerCategory_t> Container::getStoreInboxValidCategories() const
 	return validCategories.data();
 }
 
+void Container::enableLootHighlight(bool restricted, uint64_t timestamp) {
+	m_hasLootHighlight = true;
+	m_lootHighlightRestricted = restricted;
+	m_lootHighlightTimestamp = timestamp;
+}
+
+void Container::disableLootHighlight() {
+	m_hasLootHighlight = false;
+	m_lootHighlightRestricted = false;
+	m_lootHighlightTimestamp = 0;
+}
+
+void Container::setLootHighlightRestricted(bool restricted) {
+	m_lootHighlightRestricted = restricted;
+}
+
 std::shared_ptr<Item> Container::getFilteredItemByIndex(size_t index) const {
 	const auto &filteredItems = getStoreInboxFilteredItems();
 	if (index >= filteredItems.size()) {
@@ -1101,60 +1117,3 @@ size_t ContainerIterator::getCurrentIndex() const {
 	const auto &top = states.back();
 	return top.index;
 }
-
-
-ContainerSpecial_t Container::getSpecialCategory(const std::shared_ptr<Player> &player) {
-	const auto &holdingPlayer = getHoldingPlayer();
-	if (!isRewardCorpse() && (getCorpseOwner() == static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) || (getCorpseOwner() == 0 || player->canOpenCorpse(getCorpseOwner())))) {
-		return ContainerSpecial_t::LootHighlight;
-	}  
-
-	if (holdingPlayer == player) {
-		if (isQuiver() && getSlotPosition() & SLOTP_RIGHT) {
-			return ContainerSpecial_t::QuiverLoot;
-		}
-
-		auto [lootFlags, obtainFlags] = getObjectCategoryFlags(player);
-		if (lootFlags != 0 || obtainFlags != 0) {
-			return ContainerSpecial_t::Manager;
-		}
-	}
-
-	return ContainerSpecial_t::None;
-}
-
-std::pair<uint32_t, uint32_t> Container::getObjectCategoryFlags(const std::shared_ptr<Player> &player) const {
-	uint32_t lootFlags = 0, obtainFlags = 0;
-	// Cycle through all containers managed by the player
-	for (auto [category, containerPair] : player->getManagedContainers()) {
-		// Check if the category is valid before continuing
-		if (!isValidObjectCategory(category)) {
-			continue;
-		}
-
-		// containerPair.first refers to loot containers
-		if (containerPair.first == static_self_cast<Container>()) {
-			lootFlags |= 1 << category;
-		}
-
-		// containerPair.second refers to the obtain containers
-		if (containerPair.second == static_self_cast<Container>()) {
-			obtainFlags |= 1 << category;
-		}
-	}
-
-	return { lootFlags, obtainFlags };
-}
-
-uint32_t Container::getAmmoAmount(const std::shared_ptr<Player> &player) const {
-	uint32_t ammoTotal = 0;
-	if (isQuiver()) {
-		for (std::shared_ptr<Item> listItem : getItemList()) {
-			if (player->getLevel() >= Item::items[listItem->getID()].minReqLevel) {
-				ammoTotal += listItem->getItemAmount();
-			}
-		}
-	}
-
-	return ammoTotal;
-}		

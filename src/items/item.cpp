@@ -27,8 +27,6 @@
 #include "items/trashholder.hpp"
 #include "lua/creature/actions.hpp"
 #include "map/house/house.hpp"
-#include "map/spectators.hpp"
-#include "creatures/players/grouping/party.hpp"
 
 #define ITEM_IMBUEMENT_SLOT 500
 
@@ -3570,21 +3568,4 @@ bool ItemProperties::hasShader() const {
 std::string ItemProperties::getShader() const {
 	const CustomAttribute* shader = getCustomAttribute("shader");
 	return shader ? shader->getString() : "";
-}
-
-void Item::sendUpdateToClient(const std::shared_ptr<Player> &player /* = nullptr*/) {
-	if (!player) {
-		auto spectators = Spectators().find<Creature>(getPosition(), true);
-		for (const auto &spectator : spectators) {
-			spectator->getPlayer()->sendUpdateTileItem(getTile(), getPosition(), static_self_cast<Item>());
-		}
-
-		return;
-	}
-
-	const auto &party = player->getParty();
-	auto participants = party ? party->getPlayers() : std::vector<std::shared_ptr<Player>> { player };
-	for (const auto &participant : participants) {
-		participant->sendUpdateTileItem(getTile(), getPosition(), static_self_cast<Item>());
-	}
 }

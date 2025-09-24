@@ -1373,11 +1373,6 @@ public:
 		return familiars;
 	}
 
-	using ManagedContainerMap = std::map<ObjectCategory_t, std::pair<std::shared_ptr<Container>, std::shared_ptr<Container>>>;
-	const ManagedContainerMap &getManagedContainers() const {
-		return m_managedContainers;
-	}
-
 private:
 	friend class PlayerLock;
 	std::mutex mutex;
@@ -1461,7 +1456,7 @@ private:
 
 	std::map<uint64_t, std::shared_ptr<Reward>> rewardMap;
 
-	ManagedContainerMap m_managedContainers;
+	std::map<ObjectCategory_t, std::pair<std::shared_ptr<Container>, std::shared_ptr<Container>>> m_managedContainers;
 	std::vector<ForgeHistory> forgeHistoryVector;
 
 	std::vector<uint16_t> quickLootListItemIds;
