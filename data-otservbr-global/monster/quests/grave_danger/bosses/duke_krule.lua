@@ -15,6 +15,8 @@ monster.outfit = {
 
 monster.events = {
 	"grave_danger_death",
+	"DukeKruleThink",
+	"DukeKruleMechanics",
 }
 
 monster.health = 75000
@@ -68,13 +70,6 @@ monster.voices = {
 	chance = 10,
 }
 
-monster.summon = {
-	maxSummons = 4,
-	summons = {
-		{ name = "Soul Scourge", chance = 20, interval = 2000, count = 4 },
-	},
-}
-
 monster.loot = {
 	{ name = "platinum coin", minCount = 1, maxCount = 5, chance = 100000 },
 	{ name = "crystal coin", minCount = 0, maxCount = 2, chance = 50000 },
@@ -105,7 +100,7 @@ monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -900 },
 	{ name = "combat", interval = 3500, chance = 37, type = COMBAT_PHYSICALDAMAGE, minDamage = -700, maxDamage = -1200, length = 7, spread = 0, effect = CONST_ME_BLOCKHIT, target = false },
 	{ name = "combat", interval = 2500, chance = 20, type = COMBAT_PHYSICALDAMAGE, minDamage = -400, maxDamage = -1000, length = 7, spread = 0, effect = CONST_ME_BLOCKHIT, target = false },
-	{ name = "combat", interval = 4200, chance = 40, type = COMBAT_FIREDAMAGE, minDamage = -300, maxDamage = -500, radius = 9, effect = CONST_ME_HITBYFIRE, target = false },
+	--{ name = "combat", interval = 4200, chance = 40, type = COMBAT_FIREDAMAGE, minDamage = -300, maxDamage = -500, radius = 9, effect = CONST_ME_HITBYFIRE, target = false },--
 }
 
 monster.defenses = {

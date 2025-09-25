@@ -1099,6 +1099,115 @@ GameStore.Categories = {
 			},
 		},
 	},
+
+	{
+		icons = { "Category_Bundles.png" },
+		name = "Bundles",
+		rookgaard = true,
+		description = "Special bundles with multiple items for a discounted price!",
+		offers = {
+			{
+				icons = { "Field_Surgeon_Bundle.png" },
+				name = "Field Surgeon Bundle",
+				price = 900,
+				state = GameStore.States.STATE_NEW,
+				home = true,
+				description = "An essential package for every new adventurer! Includes premium days, a swift mount, a stylish outfit, and potions to begin your journey.",
+				type = GameStore.OfferTypes.OFFER_TYPE_BUNDLE,
+				contents = {
+					{
+						-- Item 1: Bloodcurl Mount
+						name = "Pallbearer",
+						type = GameStore.OfferTypes.OFFER_TYPE_MOUNT,
+						id = 236,
+					},
+					{
+						-- Item 2: Full Pumpkin Mummy Outfit
+						name = "Full Field Surgeon Outfit",
+						type = GameStore.OfferTypes.OFFER_TYPE_OUTFIT,
+						sexId = { female = 1815, male = 1814 },
+						addon = 3,
+					},
+					{
+						-- Item 3: sickbed
+						name = "Sickbed",
+						type = GameStore.OfferTypes.OFFER_TYPE_ITEM_BED,
+						itemtype = { 39788, 39789 },
+						count = 1,
+					},
+				},
+			},
+			{
+				icons = { "Rotten_Blood_Bundle.png" },
+				name = "Rotten Blood Bundle",
+				price = 900,
+				state = GameStore.States.STATE_NEW,
+				home = true,
+				description = "An essential package for every new adventurer! Includes premium days, a swift mount, a stylish outfit, and potions to begin your journey.",
+				type = GameStore.OfferTypes.OFFER_TYPE_BUNDLE,
+				contents = {
+					{
+						-- Item 1: Bloodcurl Mount
+						name = "Darkfire Devourer",
+						type = GameStore.OfferTypes.OFFER_TYPE_MOUNT,
+						id = 216,
+					},
+					{
+						-- Item 2: Full Pumpkin Mummy Outfit
+						name = "Full Darklight Evoker Outfit",
+						type = GameStore.OfferTypes.OFFER_TYPE_OUTFIT,
+						sexId = { female = 1676, male = 1675 },
+						addon = 3,
+					},
+					{
+						-- Item 3: sickbed
+						name = "Mask of the Defiler",
+						type = GameStore.OfferTypes.OFFER_TYPE_HOUSE,
+						itemtype = 44030,
+						count = 1,
+					},
+				},
+			},
+			{
+				icons = { "Sweet_Honey_Bundle.png" },
+				name = "Sweet Honey Bundle",
+				price = 900,
+				state = GameStore.States.STATE_NEW,
+				home = true,
+				description = "An essential package for every new adventurer! Includes premium days, a swift mount, a stylish outfit, and potions to begin your journey.",
+				type = GameStore.OfferTypes.OFFER_TYPE_BUNDLE,
+				contents = {
+					{
+						-- Item 1: Bloodcurl Mount
+						name = "Bumblebee",
+						type = GameStore.OfferTypes.OFFER_TYPE_MOUNT,
+						id = 231,
+					},
+					{
+						-- Item 2: Full Pumpkin Mummy Outfit
+						name = "Full Beekeeper Outfit",
+						type = GameStore.OfferTypes.OFFER_TYPE_OUTFIT,
+						sexId = { female = 1777, male = 1776 },
+						addon = 3,
+					},
+					{
+						-- Item 3: sickbed
+						name = "Candy Chest",
+						type = GameStore.OfferTypes.OFFER_TYPE_HOUSE,
+						itemtype = 48574,
+						count = 1,
+					},
+					{
+						-- Item 4: sickbed
+						name = "Beehive",
+						type = GameStore.OfferTypes.OFFER_TYPE_HOUSE,
+						itemtype = 48576,
+						count = 1,
+					},					
+				},
+			},									
+		},
+	},
 	-- Cosmetics
 	{
 		icons = { "Category_Cosmetics.png" },

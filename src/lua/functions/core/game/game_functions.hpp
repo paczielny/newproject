@@ -82,7 +82,8 @@ private:
 
 	static int luaGameGetTalkActions(lua_State* L);
 	static int luaGameGetEventCallbacks(lua_State* L);
-
+	static int luaGameRemoveAction(lua_State* L);
+	
 	static int luaGameRegisterAchievement(lua_State* L);
 	static int luaGameGetAchievementInfoById(lua_State* L);
 	static int luaGameGetAchievementInfoByName(lua_State* L);
