@@ -384,8 +384,11 @@ enum Fluids_t : uint8_t {
 	// 13.40 last fluid is 20, 21+ is a loop from 0 to 20 over and over again
 };
 
-enum SquareColor_t : uint8_t {
-	SQ_COLOR_BLACK = 0,
+enum SquareColor_t : uint8_t {  
+    SQ_COLOR_BLACK = 0,  
+    SQ_COLOR_RED = 6,  
+    SQ_COLOR_ORANGE = 78,  
+    SQ_COLOR_YELLOW = 210,  
 };
 
 enum TextColor_t : uint8_t {

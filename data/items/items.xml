@@ -46,6 +46,9 @@
 		<attribute key="script" value="moveevent">
 			<attribute key="eventType" value="stepin"/>
 		</attribute>
+		<attribute key="script" value="moveevent">  
+			<attribute key="eventType" value="additemitemtile"/>  
+		</attribute>
 	</item>
 	<item id="106" name="grass"/>
 	<item id="107" article="a" name="special flask">
@@ -4215,6 +4218,9 @@
 		<attribute key="script" value="moveevent">
 			<attribute key="eventType" value="stepin"/>
 		</attribute>
+		<attribute key="script" value="moveevent">  
+			<attribute key="eventType" value="additemitemtile"/>  
+		</attribute>
 	</item>
 	<item id="2119" article="a" name="fire field">
 		<attribute key="type" value="magicfield"/>
@@ -4260,6 +4266,9 @@
 		<attribute key="decayTo" value="0"/>
 		<attribute key="script" value="moveevent">
 			<attribute key="eventType" value="stepin"/>
+		</attribute>
+		<attribute key="script" value="moveevent">  
+			<attribute key="eventType" value="additemitemtile"/>  
 		</attribute>
 	</item>
 	<item id="2123" article="a" name="fire field">
@@ -82727,5 +82736,33 @@ Granted by TibiaGoals.com"/>
 	<item id="50288" article="an" name="open gate">
 		<attribute key="primarytype" value="doors"/>
 		<attribute key="type" value="door"/>
+	</item>
+	<item id="50343" article="a" name="viper rod">
+		<attribute key="primarytype" value="rods"/>
+		<attribute key="weaponType" value="wand"/>
+		<attribute key="shootType" value="smallearth"/>
+		<attribute key="absorbpercentice" value="12"/>
+		<attribute key="magiclevelpoints" value="5"/>
+		<attribute key="manaleechamount" value="300"/>
+		<attribute key="manaleechchance" value="100"/>
+		<attribute key="lifeleechamount" value="500"/>
+		<attribute key="lifeleechchance" value="100"/>
+		<attribute key="range" value="6"/>
+		<attribute key="weight" value="2500"/>
+		<attribute key="imbuementslot" value="2">
+			<attribute key="mana leech" value="3"/>
+			<attribute key="critical hit" value="3"/>
+			<attribute key="skillboost magic level" value="3"/>
+		</attribute>
+		<attribute key="script" value="moveevent;weapon">
+			<attribute key="level" value="400"/>
+			<attribute key="mana" value="21"/>
+			<attribute key="fromDamage" value="98"/>
+			<attribute key="toDamage" value="118"/>
+			<attribute key="weaponType" value="wand"/>
+			<attribute key="wandType" value="earth"/>
+			<attribute key="vocation" value="Druid;true, Elder Druid"/>
+			<attribute key="slot" value="hand"/>
+		</attribute>
 	</item>
 </items>

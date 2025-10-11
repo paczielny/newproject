@@ -752,7 +752,7 @@ bool Creature::dropCorpse(const std::shared_ptr<Creature> &lastHitCreature, cons
 	return true;
 }
 
-bool Creature::hasBeenAttacked(uint32_t attackerId) {
+bool Creature::hasBeenAttacked(uint32_t attackerId) const {
 	auto it = damageMap.find(attackerId);
 	if (it == damageMap.end()) {
 		return false;

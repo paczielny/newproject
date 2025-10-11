@@ -1332,86 +1332,138 @@ bool Player::canSeeCreature(const std::shared_ptr<Creature> &creature) const {
 	return true;
 }
 
-bool Player::canWalkthrough(const std::shared_ptr<Creature> &creature) {
-	if (group->access || creature->isInGhostMode()) {
-		return true;
-	}
-
-	const auto &player = creature->getPlayer();
-	const auto &monster = creature->getMonster();
-	const auto &npc = creature->getNpc();
-	bool noPvpThroughAtSummon = false;
-	// Allow players to walk through summons in no pvp worlds
-	if (g_game().getWorldType() == WORLD_TYPE_NO_PVP) {
-		const auto &monsterMaster = monster ? monster->getMaster() : nullptr;
-		const auto &monsterMasterPlayer = monsterMaster ? monsterMaster->getPlayer() : nullptr;
-		if (monsterMasterPlayer) {
-			noPvpThroughAtSummon = true;
+bool Player::canWalkthrough(const std::shared_ptr<Creature> &creature) {  
+	if (group->access || creature->isInGhostMode()) {  
+		return true;  
+	}  
+  
+	const auto &player = creature->getPlayer();  
+	const auto &monster = creature->getMonster();  
+	const auto &npc = creature->getNpc();  
+	bool noPvpThroughAtSummon = false;  
+	// Allow players to walk through summons in no pvp worlds  
+	if (g_game().getWorldType() == WORLD_TYPE_NO_PVP) {  
+		const auto &monsterMaster = monster ? monster->getMaster() : nullptr;  
+		const auto &monsterMasterPlayer = monsterMaster ? monsterMaster->getPlayer() : nullptr;  
+		if (monsterMasterPlayer) {  
+			noPvpThroughAtSummon = true;  
+		}  
+	}  
+  
+	if (monster && (monster->isFamiliar() || noPvpThroughAtSummon)) {  
+		return true;  
+	}  
+  
+	if (player) {  
+		const auto &playerTile = player->getTile();  
+		  
+		// En zonas de protección o no-PvP, siempre permitir walkthrough  
+		if (playerTile && (playerTile->hasFlag(TILESTATE_NOPVPZONE) || playerTile->hasFlag(TILESTATE_PROTECTIONZONE))) {  
+			return true;  
+		}  
+		  
+		// Verificar nivel de protección  
+		if (player->getLevel() <= static_cast<uint32_t>(g_configManager().getNumber(PROTECTION_LEVEL))) {  
+			return true;  
+		}  
+		  
+		// Verificar que el tile tenga walkstack  
+		const auto &playerTileGround = playerTile->getGround();  
+		if (!playerTileGround || !playerTileGround->hasWalkStack()) {  
+			return false;  
+		}  
+		  
+		// En Open PVP: permitir walkthrough EXCEPTO si hay situación de combate  
+		if (g_game().getWorldType() == WORLD_TYPE_PVP) {  
+    		const auto &thisPlayer = getPlayer();  
+    		// Bloquear si CUALQUIERA de los dos ha atacado al otro  
+    		if (thisPlayer->hasAttacked(player) || player->hasAttacked(thisPlayer)) {  
+    		    return false;  // Hay combate activo, bloquear  
+    		}  
+    		return true;  // No hay combate, permitir atravesar  
 		}
-	}
-
-	if (monster && (monster->isFamiliar() || noPvpThroughAtSummon)) {
-		return true;
-	}
-
-	if (player) {
-		const auto &playerTile = player->getTile();
-		if (!playerTile || (!playerTile->hasFlag(TILESTATE_NOPVPZONE) && !playerTile->hasFlag(TILESTATE_PROTECTIONZONE) && player->getLevel() > static_cast<uint32_t>(g_configManager().getNumber(PROTECTION_LEVEL)) && g_game().getWorldType() != WORLD_TYPE_NO_PVP)) {
-			return false;
-		}
-
-		const auto &playerTileGround = playerTile->getGround();
-		if (!playerTileGround || !playerTileGround->hasWalkStack()) {
-			return false;
-		}
-
-		const auto &thisPlayer = getPlayer();
-		if ((OTSYS_TIME() - lastWalkthroughAttempt) > 2000) {
-			thisPlayer->setLastWalkthroughAttempt(OTSYS_TIME());
-			return false;
-		}
-
-		if (creature->getPosition() != lastWalkthroughPosition) {
-			thisPlayer->setLastWalkthroughPosition(creature->getPosition());
-			return false;
-		}
-
-		thisPlayer->setLastWalkthroughPosition(creature->getPosition());
-		return true;
-	} else if (npc) {
-		const auto &tile = npc->getTile();
-		const auto &house = tile ? tile->getHouse() : nullptr;
-		return (house != nullptr);
-	}
-
-	return false;
+		  
+		// Para NO_PVP, usar el sistema de intentos (Retro PvP)  
+		if (g_game().getWorldType() == WORLD_TYPE_NO_PVP) {  
+			const auto &thisPlayer = getPlayer();  
+			if ((OTSYS_TIME() - lastWalkthroughAttempt) > 2000) {  
+				thisPlayer->setLastWalkthroughAttempt(OTSYS_TIME());  
+				return false;  
+			}  
+  
+			if (creature->getPosition() != lastWalkthroughPosition) {  
+				thisPlayer->setLastWalkthroughPosition(creature->getPosition());  
+				return false;  
+			}  
+  
+			thisPlayer->setLastWalkthroughPosition(creature->getPosition());  
+			return true;  
+		}  
+		  
+		return false;  
+	} else if (npc) {  
+		const auto &tile = npc->getTile();  
+		const auto &house = tile ? tile->getHouse() : nullptr;  
+		return (house != nullptr);  
+	}  
+  
+	return false;  
 }
 
-bool Player::canWalkthroughEx(const std::shared_ptr<Creature> &creature) const {
-	if (group->access) {
-		return true;
-	}
-
-	const auto &monster = creature->getMonster();
-	if (monster) {
-		if (!monster->isFamiliar()) {
-			return false;
-		}
-		return true;
-	}
-
-	const auto &player = creature->getPlayer();
-	const auto &npc = creature->getNpc();
-	if (player) {
-		const auto &playerTile = player->getTile();
-		return playerTile && (playerTile->hasFlag(TILESTATE_NOPVPZONE) || playerTile->hasFlag(TILESTATE_PROTECTIONZONE) || player->getLevel() <= static_cast<uint32_t>(g_configManager().getNumber(PROTECTION_LEVEL)) || g_game().getWorldType() == WORLD_TYPE_NO_PVP);
-	} else if (npc) {
-		const auto &tile = npc->getTile();
-		const auto &houseTile = std::dynamic_pointer_cast<HouseTile>(tile);
-		return (houseTile != nullptr);
-	} else {
-		return false;
-	}
+bool Player::canWalkthroughEx(const std::shared_ptr<Creature> &creature) const {  
+    if (group->access) {  
+        return true;  
+    }  
+  
+    const auto &monster = creature->getMonster();  
+    if (monster) {  
+        if (!monster->isFamiliar()) {  
+            return false;  
+        }  
+        return true;  
+    }  
+  
+    const auto &player = creature->getPlayer();  
+    const auto &npc = creature->getNpc();  
+    if (player) {  
+        const auto &playerTile = player->getTile();  
+          
+        // En zonas de protección o no-PvP, siempre permitir walkthrough  
+        if (playerTile && (playerTile->hasFlag(TILESTATE_NOPVPZONE) || playerTile->hasFlag(TILESTATE_PROTECTIONZONE))) {  
+            return true;  
+        }  
+          
+        // Verificar nivel de protección  
+        if (player->getLevel() <= static_cast<uint32_t>(g_configManager().getNumber(PROTECTION_LEVEL))) {  
+            return true;  
+        }  
+          
+        // En Open PVP: permitir walkthrough EXCEPTO si hay situación de combate  
+        if (g_game().getWorldType() == WORLD_TYPE_PVP) {  
+            const auto &thisPlayer = getPlayer();  
+            // Necesitamos hacer const_cast porque estamos en una función const  
+            auto nonConstPlayer = std::const_pointer_cast<Player>(player);  
+            auto nonConstThisPlayer = std::const_pointer_cast<Player>(thisPlayer);  
+            // Bloquear si hay situación de combate activa entre los jugadores  
+            if (nonConstThisPlayer->hasAttacked(nonConstPlayer) || nonConstPlayer->hasAttacked(nonConstThisPlayer)) {  
+                return false;  // Hay combate activo, bloquear  
+            }  
+            return true;  // No hay combate, permitir atravesar  
+        }  
+          
+        // Para NO_PVP, siempre permitir  
+        if (g_game().getWorldType() == WORLD_TYPE_NO_PVP) {  
+            return true;  
+        }  
+          
+        return false;  
+    } else if (npc) {  
+        const auto &tile = npc->getTile();  
+        const auto &houseTile = std::dynamic_pointer_cast<HouseTile>(tile);  
+        return (houseTile != nullptr);  
+    } else {  
+        return false;  
+    }  
 }
 
 RaceType_t Player::getRace() const {
@@ -5998,6 +6050,10 @@ void Player::onAttackedCreature(const std::shared_ptr<Creature> &target) {
 		if (getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {
 			addAttacked(targetPlayer);
 			targetPlayer->sendCreatureSkull(static_self_cast<Player>());
+
+			g_game().updateCreatureWalkthrough(static_self_cast<Player>());  
+		    g_game().updateCreatureWalkthrough(targetPlayer); 
+
 		} else if (!targetPlayer->hasAttacked(static_self_cast<Player>())) {
 			if (!pzLocked) {
 				pzLocked = true;
@@ -6007,6 +6063,9 @@ void Player::onAttackedCreature(const std::shared_ptr<Creature> &target) {
 			if (!Combat::isInPvpZone(static_self_cast<Player>(), targetPlayer) && !isInWar(targetPlayer)) {
 				addAttacked(targetPlayer);
 
+				g_game().updateCreatureWalkthrough(static_self_cast<Player>());  
+			    g_game().updateCreatureWalkthrough(targetPlayer); 
+				
 				if (targetPlayer->getSkull() == SKULL_NONE && getSkull() == SKULL_NONE && !targetPlayer->hasKilled(static_self_cast<Player>())) {
 					setSkull(SKULL_WHITE);
 				}
