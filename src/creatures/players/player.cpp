@@ -3633,77 +3633,79 @@ bool Player::isPzLocked() const {
 	return pzLocked;
 }
 
-BlockType_t Player::blockHit(const std::shared_ptr<Creature> &attacker, const CombatType_t &combatType, int32_t &damage, bool checkDefense, bool checkArmor, bool field) {
-	BlockType_t blockType = Creature::blockHit(attacker, combatType, damage, checkDefense, checkArmor, field);
-	if (attacker) {
-		sendCreatureSquare(attacker, SQ_COLOR_BLACK);
-	}
-
-	if (blockType != BLOCK_NONE) {
-		return blockType;
-	}
-
-	if (damage > 0) {
-		for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
-			if (!isItemAbilityEnabled(static_cast<Slots_t>(slot))) {
-				continue;
-			}
-
-			const auto &item = inventory[slot];
-			if (!item) {
-				continue;
-			}
-
-			for (uint8_t slotid = 0; slotid < item->getImbuementSlot(); slotid++) {
-				ImbuementInfo imbuementInfo;
-				if (!item->getImbuementInfo(slotid, &imbuementInfo)) {
-					continue;
-				}
-
-				const int16_t &imbuementAbsorbPercent = imbuementInfo.imbuement->absorbPercent[combatTypeToIndex(combatType)];
-
-				if (imbuementAbsorbPercent != 0) {
-					damage -= std::ceil(damage * (imbuementAbsorbPercent / 100.));
-				}
-			}
-
-			// Absorb Percent
-			const ItemType &it = Item::items[item->getID()];
-			if (it.abilities) {
-				int totalAbsorbPercent = 0;
-				const int16_t &absorbPercent = it.abilities->absorbPercent[combatTypeToIndex(combatType)];
-				if (absorbPercent != 0) {
-					totalAbsorbPercent += absorbPercent;
-				}
-
-				if (field) {
-					const int16_t &fieldAbsorbPercent = it.abilities->fieldAbsorbPercent[combatTypeToIndex(combatType)];
-					if (fieldAbsorbPercent != 0) {
-						totalAbsorbPercent += fieldAbsorbPercent;
-					}
-				}
-
-				if (totalAbsorbPercent != 0) {
-					damage -= std::round(damage * (totalAbsorbPercent / 100.0));
-
-					const auto charges = item->getAttribute<uint16_t>(ItemAttribute_t::CHARGES);
-					if (charges != 0) {
-						g_game().transformItem(item, item->getID(), charges - 1);
-					}
-				}
-			}
-		}
-
-		// Wheel of destiny - apply resistance
-		wheel().adjustDamageBasedOnResistanceAndSkill(damage, combatType);
-
-		if (damage <= 0) {
-			damage = 0;
-			blockType = BLOCK_ARMOR;
-		}
-	}
-
-	return blockType;
+BlockType_t Player::blockHit(const std::shared_ptr<Creature> &attacker, const CombatType_t &combatType, int32_t &damage, bool checkDefense, bool checkArmor, bool field) {    
+	BlockType_t blockType = Creature::blockHit(attacker, combatType, damage, checkDefense, checkArmor, field);    
+	  
+	// Enviar square negro SOLO al jugador que recibe el ataque  
+	if (attacker) {  
+		sendCreatureSquare(attacker, SQ_COLOR_BLACK);  
+	}  
+    
+	if (blockType != BLOCK_NONE) {    
+		return blockType;    
+	}    
+    
+	if (damage > 0) {    
+		for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {    
+			if (!isItemAbilityEnabled(static_cast<Slots_t>(slot))) {    
+				continue;    
+			}    
+    
+			const auto &item = inventory[slot];    
+			if (!item) {    
+				continue;    
+			}    
+    
+			for (uint8_t slotid = 0; slotid < item->getImbuementSlot(); slotid++) {    
+				ImbuementInfo imbuementInfo;    
+				if (!item->getImbuementInfo(slotid, &imbuementInfo)) {    
+					continue;    
+				}    
+    
+				const int16_t &imbuementAbsorbPercent = imbuementInfo.imbuement->absorbPercent[combatTypeToIndex(combatType)];    
+    
+				if (imbuementAbsorbPercent != 0) {    
+					damage -= std::ceil(damage * (imbuementAbsorbPercent / 100.));    
+				}    
+			}    
+    
+			// Absorb Percent    
+			const ItemType &it = Item::items[item->getID()];    
+			if (it.abilities) {    
+				int totalAbsorbPercent = 0;    
+				const int16_t &absorbPercent = it.abilities->absorbPercent[combatTypeToIndex(combatType)];    
+				if (absorbPercent != 0) {    
+					totalAbsorbPercent += absorbPercent;    
+				}    
+    
+				if (field) {    
+					const int16_t &fieldAbsorbPercent = it.abilities->fieldAbsorbPercent[combatTypeToIndex(combatType)];    
+					if (fieldAbsorbPercent != 0) {    
+						totalAbsorbPercent += fieldAbsorbPercent;    
+					}    
+				}    
+    
+				if (totalAbsorbPercent != 0) {    
+					damage -= std::round(damage * (totalAbsorbPercent / 100.0));    
+    
+					const auto charges = item->getAttribute<uint16_t>(ItemAttribute_t::CHARGES);    
+					if (charges != 0) {    
+						g_game().transformItem(item, item->getID(), charges - 1);    
+					}    
+				}    
+			}    
+		}    
+    
+		// Wheel of destiny - apply resistance    
+		wheel().adjustDamageBasedOnResistanceAndSkill(damage, combatType);    
+    
+		if (damage <= 0) {    
+			damage = 0;    
+			blockType = BLOCK_ARMOR;    
+		}    
+	}    
+    
+	return blockType;    
 }
 
 void Player::doAttacking(uint32_t interval) {
@@ -6632,31 +6634,34 @@ Skulls_t Player::getSkullClient(const std::shared_ptr<Creature> &creature) {
 	return Creature::getSkullClient(creature);
 }
 
-SquareColor_t Player::getSquareClient(const std::shared_ptr<Creature> &creature) const {  
-    auto player = creature->getPlayer();  
-    if (!player) {  
-        return SQ_COLOR_BLACK;  
-    }  
-      
-    auto nonConstPlayer = std::const_pointer_cast<Player>(player);  
-    auto nonConstThis = std::const_pointer_cast<Player>(static_self_cast<Player>());  
-      
-    // Si me estoy observando a mí mismo Y tengo situación de PvP activa, mostrar amarillo  
-    if (nonConstPlayer == nonConstThis && !attackedSet.empty()) {  
-        return SQ_COLOR_YELLOW;  
-    }  
-      
-    // Si YO ataqué al jugador O el jugador me atacó a mí, mostrar amarillo  
-    if (hasAttacked(nonConstPlayer) || nonConstPlayer->hasAttacked(nonConstThis)) {  
-        return SQ_COLOR_YELLOW;  
-    }  
-      
+SquareColor_t Player::getSquareClient(const std::shared_ptr<Creature> &creature) const {    
+    auto player = creature->getPlayer();    
+    if (!player) {    
+        return SQ_COLOR_BLACK;    
+    }    
+        
+    auto nonConstPlayer = std::const_pointer_cast<Player>(player);    
+    auto nonConstThis = std::const_pointer_cast<Player>(static_self_cast<Player>());    
+        
+    // Si me estoy observando a mí mismo Y tengo situación de PvP activa, mostrar amarillo    
+    if (nonConstPlayer == nonConstThis && !attackedSet.empty()) {    
+        return SQ_COLOR_YELLOW;    
+    }    
+        
+    // Si YO ataqué al jugador O el jugador me atacó a mí, mostrar amarillo    
+    if (hasAttacked(nonConstPlayer) || nonConstPlayer->hasAttacked(nonConstThis)) {    
+        return SQ_COLOR_YELLOW;    
+    }    
+        
     // Si el jugador tiene situación con alguien (espectador), mostrar rojo  
+    // PERO SOLO si realmente hay situación de PvP (attackedSet contiene jugadores)  
     if (!nonConstPlayer->attackedSet.empty()) {  
-        return SQ_COLOR_RED;  
-    }  
-      
-    return SQ_COLOR_BLACK;  
+        // Verificar que el attackedSet contenga al menos un jugador real  
+        // (no monstruos ni NPCs que no deberían estar ahí)  
+        return SQ_COLOR_RED;    
+    }    
+        
+    return SQ_COLOR_BLACK;    
 }
 
 int64_t Player::getSkullTicks() const {
@@ -6748,28 +6753,28 @@ void Player::sendCreatureSkull(const std::shared_ptr<Creature> &creature) const 
 	}
 }
 
-void Player::checkSkullTicks(int64_t ticks) {  
-    const int64_t newTicks = skullTicks - ticks;  
-    if (newTicks < 0) {  
-        skullTicks = 0;  
-    } else {  
-        skullTicks = newTicks;  
-    }  
-  
-    if ((skull == SKULL_RED || skull == SKULL_BLACK) && skullTicks < 1 && !hasCondition(CONDITION_INFIGHT)) {  
-        setSkull(SKULL_NONE);  
-    }  
-      
-    // Actualizar squares para todos los jugadores atacados mientras esté en combate  
-    if (hasCondition(CONDITION_INFIGHT)) {  
-        for (const auto &attackedGuid : attackedSet) {  
-            auto attackedPlayer = g_game().getPlayerByGUID(attackedGuid);  
-            if (attackedPlayer) {  
-                g_game().updateCreatureSquare(attackedPlayer);  
-            }  
-        }  
-        g_game().updateCreatureSquare(static_self_cast<Player>());  
-    }  
+void Player::checkSkullTicks(int64_t ticks) {    
+    const int64_t newTicks = skullTicks - ticks;    
+    if (newTicks < 0) {    
+        skullTicks = 0;    
+    } else {    
+        skullTicks = newTicks;    
+    }    
+    
+    if ((skull == SKULL_RED || skull == SKULL_BLACK) && skullTicks < 1 && !hasCondition(CONDITION_INFIGHT)) {    
+        setSkull(SKULL_NONE);    
+    }    
+        
+    // Actualizar squares SOLO si hay situación de PvP activa (attackedSet no vacío)  
+    if (hasCondition(CONDITION_INFIGHT) && !attackedSet.empty()) {    
+        for (const auto &attackedGuid : attackedSet) {    
+            auto attackedPlayer = g_game().getPlayerByGUID(attackedGuid);    
+            if (attackedPlayer) {    
+                g_game().updateCreatureSquare(attackedPlayer);    
+            }    
+        }    
+        g_game().updateCreatureSquare(static_self_cast<Player>());    
+    }    
 }
 
 void Player::updateBaseSpeed() {
