@@ -445,6 +445,7 @@ public:
 	void updateCreatureIcon(const std::shared_ptr<Creature> &creature);
 	void reloadCreature(const std::shared_ptr<Creature> &creature);
 	void updateCreatureSkull(const std::shared_ptr<Creature> &player) const;
+	void updateCreatureSquare(const std::shared_ptr<Creature> &creature) const;
 	void updatePlayerShield(const std::shared_ptr<Player> &player);
 	void updateCreatureType(const std::shared_ptr<Creature> &creature);
 	void updateCreatureWalkthrough(const std::shared_ptr<Creature> &creature);

@@ -769,6 +769,8 @@ public:
 	void addUnjustifiedDead(const std::shared_ptr<Player> &attacked);
 	void sendCreatureEmblem(const std::shared_ptr<Creature> &creature) const;
 	void sendCreatureSkull(const std::shared_ptr<Creature> &creature) const;
+	SquareColor_t getSquareClient(const std::shared_ptr<Creature> &creature) const;
+
 	void checkSkullTicks(int64_t ticks);
 
 	bool canWear(uint16_t lookType, uint8_t addons) const;

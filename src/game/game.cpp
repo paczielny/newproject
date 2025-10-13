@@ -8587,6 +8587,12 @@ void Game::updateCreatureSkull(const std::shared_ptr<Creature> &creature) const 
 	}
 }
 
+void Game::updateCreatureSquare(const std::shared_ptr<Creature> &creature) const {  
+    for (const auto &spectator : Spectators().find<Player>(creature->getPosition(), true)) {  
+        spectator->getPlayer()->sendCreatureSquare(creature, spectator->getPlayer()->getSquareClient(creature));  
+    }  
+}
+
 void Game::updatePlayerShield(const std::shared_ptr<Player> &player) {
 	for (const auto &spectator : Spectators().find<Player>(player->getPosition(), true)) {
 		spectator->getPlayer()->sendCreatureShield(player);

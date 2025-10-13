@@ -6020,64 +6020,74 @@ void Player::onCombatRemoveCondition(const std::shared_ptr<Condition> &condition
 	}
 }
 
-void Player::onAttackedCreature(const std::shared_ptr<Creature> &target) {
-	Creature::onAttackedCreature(target);
-
-	if (!target) {
-		return;
-	}
-
-	if (target->getZoneType() == ZONE_PVP) {
-		return;
-	}
-
-	if (target == getPlayer()) {
-		addInFightTicks();
-		return;
-	}
-
-	if (hasFlag(PlayerFlags_t::NotGainInFight)) {
-		return;
-	}
-
-	const auto &targetPlayer = target->getPlayer();
-	if (targetPlayer && !isPartner(targetPlayer) && !isGuildMate(targetPlayer)) {
-		if (!pzLocked && g_game().getWorldType() == WORLD_TYPE_PVP_ENFORCED) {
-			pzLocked = true;
-			sendIcons();
-		}
-
-		if (getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {
-			addAttacked(targetPlayer);
-			targetPlayer->sendCreatureSkull(static_self_cast<Player>());
-
-			g_game().updateCreatureWalkthrough(static_self_cast<Player>());  
-		    g_game().updateCreatureWalkthrough(targetPlayer); 
-
-		} else if (!targetPlayer->hasAttacked(static_self_cast<Player>())) {
-			if (!pzLocked) {
-				pzLocked = true;
-				sendIcons();
-			}
-
-			if (!Combat::isInPvpZone(static_self_cast<Player>(), targetPlayer) && !isInWar(targetPlayer)) {
-				addAttacked(targetPlayer);
-
-				g_game().updateCreatureWalkthrough(static_self_cast<Player>());  
-			    g_game().updateCreatureWalkthrough(targetPlayer); 
-				
-				if (targetPlayer->getSkull() == SKULL_NONE && getSkull() == SKULL_NONE && !targetPlayer->hasKilled(static_self_cast<Player>())) {
-					setSkull(SKULL_WHITE);
-				}
-
-				if (getSkull() == SKULL_NONE) {
-					targetPlayer->sendCreatureSkull(static_self_cast<Player>());
-				}
-			}
-		}
-	}
-
-	addInFightTicks();
+void Player::onAttackedCreature(const std::shared_ptr<Creature> &target) {    
+	Creature::onAttackedCreature(target);    
+    
+	if (!target) {    
+		return;    
+	}    
+    
+	if (target->getZoneType() == ZONE_PVP) {    
+		return;    
+	}    
+    
+	if (target == getPlayer()) {    
+		addInFightTicks();    
+		return;    
+	}    
+    
+	if (hasFlag(PlayerFlags_t::NotGainInFight)) {    
+		return;    
+	}    
+    
+	const auto &targetPlayer = target->getPlayer();    
+	if (targetPlayer && !isPartner(targetPlayer) && !isGuildMate(targetPlayer)) {    
+		if (!pzLocked && g_game().getWorldType() == WORLD_TYPE_PVP_ENFORCED) {    
+			pzLocked = true;    
+			sendIcons();    
+		}    
+    
+		if (getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {    
+			addAttacked(targetPlayer);   
+			targetPlayer->addAttacked(static_self_cast<Player>());   
+			targetPlayer->sendCreatureSkull(static_self_cast<Player>());    
+    
+			g_game().updateCreatureWalkthrough(static_self_cast<Player>());      
+			g_game().updateCreatureWalkthrough(targetPlayer);    
+			    
+			// Actualizar squares UNA SOLA VEZ para todos (jugadores + espectadores)  
+			g_game().updateCreatureSquare(static_self_cast<Player>());    
+			g_game().updateCreatureSquare(targetPlayer);    
+    
+		} else if (!targetPlayer->hasAttacked(static_self_cast<Player>())) {    
+			if (!pzLocked) {    
+				pzLocked = true;    
+				sendIcons();    
+			}    
+    
+			if (!Combat::isInPvpZone(static_self_cast<Player>(), targetPlayer) && !isInWar(targetPlayer)) {    
+				addAttacked(targetPlayer);  
+				targetPlayer->addAttacked(static_self_cast<Player>()); // AGREGAR ESTA LÍNEA  
+    
+				g_game().updateCreatureWalkthrough(static_self_cast<Player>());      
+				g_game().updateCreatureWalkthrough(targetPlayer);    
+				    
+				// Actualizar squares UNA SOLA VEZ para todos (jugadores + espectadores)  
+				g_game().updateCreatureSquare(static_self_cast<Player>());    
+				g_game().updateCreatureSquare(targetPlayer);    
+				    
+				if (targetPlayer->getSkull() == SKULL_NONE && getSkull() == SKULL_NONE && !targetPlayer->hasKilled(static_self_cast<Player>())) {    
+					setSkull(SKULL_WHITE);    
+				}    
+    
+				if (getSkull() == SKULL_NONE) {    
+					targetPlayer->sendCreatureSkull(static_self_cast<Player>());    
+				}    
+			}    
+		}    
+	}    
+    
+	addInFightTicks();    
 }
 
 void Player::onAttacked() {
@@ -6622,6 +6632,33 @@ Skulls_t Player::getSkullClient(const std::shared_ptr<Creature> &creature) {
 	return Creature::getSkullClient(creature);
 }
 
+SquareColor_t Player::getSquareClient(const std::shared_ptr<Creature> &creature) const {  
+    auto player = creature->getPlayer();  
+    if (!player) {  
+        return SQ_COLOR_BLACK;  
+    }  
+      
+    auto nonConstPlayer = std::const_pointer_cast<Player>(player);  
+    auto nonConstThis = std::const_pointer_cast<Player>(static_self_cast<Player>());  
+      
+    // Si me estoy observando a mí mismo Y tengo situación de PvP activa, mostrar amarillo  
+    if (nonConstPlayer == nonConstThis && !attackedSet.empty()) {  
+        return SQ_COLOR_YELLOW;  
+    }  
+      
+    // Si YO ataqué al jugador O el jugador me atacó a mí, mostrar amarillo  
+    if (hasAttacked(nonConstPlayer) || nonConstPlayer->hasAttacked(nonConstThis)) {  
+        return SQ_COLOR_YELLOW;  
+    }  
+      
+    // Si el jugador tiene situación con alguien (espectador), mostrar rojo  
+    if (!nonConstPlayer->attackedSet.empty()) {  
+        return SQ_COLOR_RED;  
+    }  
+      
+    return SQ_COLOR_BLACK;  
+}
+
 int64_t Player::getSkullTicks() const {
 	return skullTicks;
 }
@@ -6711,17 +6748,28 @@ void Player::sendCreatureSkull(const std::shared_ptr<Creature> &creature) const 
 	}
 }
 
-void Player::checkSkullTicks(int64_t ticks) {
-	const int64_t newTicks = skullTicks - ticks;
-	if (newTicks < 0) {
-		skullTicks = 0;
-	} else {
-		skullTicks = newTicks;
-	}
-
-	if ((skull == SKULL_RED || skull == SKULL_BLACK) && skullTicks < 1 && !hasCondition(CONDITION_INFIGHT)) {
-		setSkull(SKULL_NONE);
-	}
+void Player::checkSkullTicks(int64_t ticks) {  
+    const int64_t newTicks = skullTicks - ticks;  
+    if (newTicks < 0) {  
+        skullTicks = 0;  
+    } else {  
+        skullTicks = newTicks;  
+    }  
+  
+    if ((skull == SKULL_RED || skull == SKULL_BLACK) && skullTicks < 1 && !hasCondition(CONDITION_INFIGHT)) {  
+        setSkull(SKULL_NONE);  
+    }  
+      
+    // Actualizar squares para todos los jugadores atacados mientras esté en combate  
+    if (hasCondition(CONDITION_INFIGHT)) {  
+        for (const auto &attackedGuid : attackedSet) {  
+            auto attackedPlayer = g_game().getPlayerByGUID(attackedGuid);  
+            if (attackedPlayer) {  
+                g_game().updateCreatureSquare(attackedPlayer);  
+            }  
+        }  
+        g_game().updateCreatureSquare(static_self_cast<Player>());  
+    }  
 }
 
 void Player::updateBaseSpeed() {
