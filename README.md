@@ -69,3 +69,5 @@ other open-source initiatives.
 ## Partners
 
 [![Supported by OTServ Brasil](https://raw.githubusercontent.com/otbr/otserv-brasil/main/otbr.png)](https://forums.otserv.com.br)
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/paczielny/newproject)
