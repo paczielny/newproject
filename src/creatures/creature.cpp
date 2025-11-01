@@ -549,6 +549,13 @@ void Creature::onDeath() {
 				const uint64_t gainExp = getGainedExperience(attacker);
 				const auto &attackerMaster = attacker->getMaster() ? attacker->getMaster() : attacker;
 				if (const auto &attackerPlayer = attackerMaster->getPlayer()) {
+					if (auto thisPlayer = getPlayer()) {
+						attackerPlayer->removeAttacked(thisPlayer);
+						thisPlayer->removeAttackedBy(attackerPlayer);
+					}
+
+					g_game().updateCreatureSquare(attackerPlayer);
+					
 					const auto &party = attackerPlayer->getParty();
 					killers.insert(attackerPlayer);
 					if (party && party->getLeader() && party->isSharedExperienceActive() && party->isSharedExperienceEnabled()) {
@@ -752,7 +759,7 @@ bool Creature::dropCorpse(const std::shared_ptr<Creature> &lastHitCreature, cons
 	return true;
 }
 
-bool Creature::hasBeenAttacked(uint32_t attackerId) const {
+bool Creature::hasBeenAttacked(uint32_t attackerId) {
 	auto it = damageMap.find(attackerId);
 	if (it == damageMap.end()) {
 		return false;

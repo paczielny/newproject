@@ -159,6 +159,9 @@ public:
 
 	std::shared_ptr<Player> getPlayerByID(uint32_t id, bool allowOffline = false);
 
+	std::shared_ptr<Player> getOwnerPlayer(const std::shared_ptr<Creature> &creature);
+	std::shared_ptr<Player> getOwnerPlayer(uint32_t creatureId);
+
 	std::shared_ptr<Player> getPlayerByName(const std::string &s, bool allowOffline = false, bool isNewName = false);
 
 	std::shared_ptr<Player> getPlayerByGUID(const uint32_t &guid, bool allowOffline = false);
@@ -358,7 +361,7 @@ public:
 	void playerSetAttackedCreature(uint32_t playerId, uint32_t creatureId);
 	void playerFollowCreature(uint32_t playerId, uint32_t creatureId);
 	void playerCancelAttackAndFollow(uint32_t playerId);
-	void playerSetFightModes(uint32_t playerId, FightMode_t fightMode, bool chaseMode, bool secureMode);
+	void playerSetFightModes(uint32_t playerId, FightMode_t fightMode, PvpMode_t pvpMode, bool chaseMode, bool secureMode);
 	void playerLookAt(uint32_t playerId, uint16_t itemId, const Position &pos, uint8_t stackPos);
 	void playerLookInBattleList(uint32_t playerId, uint32_t creatureId);
 	void playerQuickLootCorpse(const std::shared_ptr<Player> &player, const std::shared_ptr<Container> &corpse, const Position &position);
@@ -385,7 +388,7 @@ public:
 	void playerRequestAddVip(uint32_t playerId, const std::string &name);
 	void playerRequestRemoveVip(uint32_t playerId, uint32_t guid);
 	void playerRequestEditVip(uint32_t playerId, uint32_t guid, const std::string &description, uint32_t icon, bool notify, std::vector<uint8_t> vipGroupsId);
-	void playerApplyImbuement(uint32_t playerId, uint16_t imbuementid, uint8_t slot, bool protectionCharm);
+	void playerApplyImbuement(uint32_t playerId, uint16_t imbuementid, uint8_t slot);
 	void playerClearImbuement(uint32_t playerid, uint8_t slot);
 	void playerCloseImbuementWindow(uint32_t playerid);
 	void playerTurn(uint32_t playerId, Direction dir);
@@ -445,7 +448,7 @@ public:
 	void updateCreatureIcon(const std::shared_ptr<Creature> &creature);
 	void reloadCreature(const std::shared_ptr<Creature> &creature);
 	void updateCreatureSkull(const std::shared_ptr<Creature> &player) const;
-	void updateCreatureSquare(const std::shared_ptr<Creature> &creature) const;
+	void updateCreatureSquare(const std::shared_ptr<Creature> &creature);
 	void updatePlayerShield(const std::shared_ptr<Player> &player);
 	void updateCreatureType(const std::shared_ptr<Creature> &creature);
 	void updateCreatureWalkthrough(const std::shared_ptr<Creature> &creature);
@@ -456,6 +459,7 @@ public:
 	// Events
 	void checkCreatures();
 	void checkLight();
+	void checkImbuementsAndSereneStatus();
 
 	bool combatBlockHit(CombatDamage &damage, const std::shared_ptr<Creature> &attacker, const std::shared_ptr<Creature> &target, bool checkDefense, bool checkArmor, bool field);
 
@@ -942,7 +946,7 @@ private:
 	void cacheQueryHighscore(const std::string &key, const std::string &query, uint32_t page, uint8_t entriesPerPage);
 	void processHighscoreResults(const DBResult_ptr &result, uint32_t playerID, uint8_t category, uint32_t vocation, uint8_t entriesPerPage);
 
-	std::string generateVocationConditionHighscore(uint32_t vocation);
+	std::string generateVocationConditionHighscore(uint32_t searchVocationBaseId);
 	std::string generateHighscoreQuery(
 		const std::string &categoryName,
 		uint32_t page,
@@ -954,6 +958,9 @@ private:
 	std::string generateHighscoreOrGetCachedQueryForOurRank(const std::string &categoryName, uint8_t entriesPerPage, uint32_t playerGUID, uint32_t vocation);
 
 	void updatePlayersOnline() const;
+
+	bool hasPartyMembersNearby(const std::shared_ptr<Player> &player);
+	bool isPlayerNoBoxed(const std::shared_ptr<Player> &player);
 };
 
 constexpr auto g_game = Game::getInstance;

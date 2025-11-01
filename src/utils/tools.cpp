@@ -20,6 +20,9 @@
 #include "absl/debugging/stacktrace.h"
 #include "absl/debugging/symbolize.h"
 
+#include <unordered_set>
+#include <string_view>
+
 void printXMLError(const std::string &where, const std::string &fileName, const pugi::xml_parse_result &result) {
 	g_logger().error("[{}] Failed to load {}: {}", where, fileName, result.description());
 
@@ -885,7 +888,9 @@ const ImbuementTypeNames imbuementTypeNames = {
 	{ "skillboost shielding", IMBUEMENT_SKILLBOOST_SHIELDING },
 	{ "skillboost distance", IMBUEMENT_SKILLBOOST_DISTANCE },
 	{ "skillboost magic level", IMBUEMENT_SKILLBOOST_MAGIC_LEVEL },
-	{ "increase capacity", IMBUEMENT_INCREASE_CAPACITY }
+	{ "increase capacity", IMBUEMENT_INCREASE_CAPACITY },
+	{ "skillboost fist", IMBUEMENT_SKILLBOOST_FIST },
+	{ "paralysis removal", IMBUEMENT_PARALYSIS_REMOVAL },
 };
 
 /**
@@ -1088,6 +1093,8 @@ std::string getWeaponName(WeaponType_t weaponType) {
 			return "ammunition";
 		case WEAPON_MISSILE:
 			return "missile";
+		case WEAPON_FIST:
+			return "fist";
 		default:
 			return {};
 	}
@@ -1103,7 +1110,8 @@ WeaponType_t getWeaponType(const std::string &name) {
 		{ "distance", WeaponType_t::WEAPON_DISTANCE },
 		{ "wand", WeaponType_t::WEAPON_WAND },
 		{ "ammo", WeaponType_t::WEAPON_AMMO },
-		{ "missile", WeaponType_t::WEAPON_MISSILE }
+		{ "missile", WeaponType_t::WEAPON_MISSILE },
+		{ "fist", WeaponType_t::WEAPON_FIST }
 	};
 
 	const auto it = type_mapping.find(name);
@@ -1547,8 +1555,17 @@ const char* getReturnMessage(ReturnValue value) {
 		case RETURNVALUE_ITEMUNTRADEABLE:
 			return "This item is untradeable.";
 
-		case RETURNVALUE_NOTOWNHIRELING:
-			return "You do not own this hireling.";
+		case RETURNVALUE_NOTENOUGHHARMONY:
+			return "You do not have enough harmony.";
+
+		case RETURNVALUE_YOUCANNOTPASSTHROUGHAGGRESSIVECREATURES:
+			return "You cannot pass creatures that are aggressive against.";
+
+		case RETURNVALUE_YOUCANNOTPASSTHROUGHAGGRESSIVEPLAYERS:
+			return "You cannot pass players that are aggressive against.";
+
+		case RETURNVALUE_ADJUSTYOURCOMBAT:
+			return "You need to adjust your PvP Mode.";
 
 		// Any unhandled ReturnValue will go enter here
 		default:
@@ -1735,6 +1752,8 @@ std::string getObjectCategoryName(ObjectCategory_t category) {
 			return "Gold";
 		case OBJECTCATEGORY_QUIVERS:
 			return "Quiver";
+		case OBJECTCATEGORY_FISTS:
+			return "Weapons: Fists";
 		case OBJECTCATEGORY_DEFAULT:
 			return "Unassigned Loot";
 		default:
@@ -1770,6 +1789,7 @@ bool isValidObjectCategory(ObjectCategory_t category) {
 		OBJECTCATEGORY_TIBIACOINS,
 		OBJECTCATEGORY_CREATUREPRODUCTS,
 		OBJECTCATEGORY_QUIVERS,
+		OBJECTCATEGORY_FISTS,
 		OBJECTCATEGORY_GOLD,
 		OBJECTCATEGORY_DEFAULT,
 	};
@@ -2137,3 +2157,12 @@ uint8_t calculateMaxPvpReduction(uint8_t blessCount, bool isPromoted /* = false*
 
 	return result;
 }
+
+const std::unordered_set<std::string_view> harmonySpells = {
+	"Devastating Knockout",
+	"Greater Tiger Clash",
+	"Mass Spirit Mend",
+	"Spiritual Outburst",
+	"Sweeping Takedown",
+	"Tiger Clash"
+};

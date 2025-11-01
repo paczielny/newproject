@@ -160,8 +160,12 @@ bool ConfigManager::load() {
 	loadBoolConfig(L, XP_DISPLAY_MODE, "experienceDisplayRates", true);
 	loadBoolConfig(L, CYCLOPEDIA_HOUSE_AUCTION, "toggleCyclopediaHouseAuction", true);
 	loadBoolConfig(L, LEAVE_PARTY_ON_DEATH, "leavePartyOnDeath", false);
-
+	loadBoolConfig(L, TOGGLE_EXPERT_PVP, "toggleExpertPvp", false);
+	loadBoolConfig(L, EXPERT_PVP_CANWALKTHROUGHOTHERPLAYERS, "canWalkThroughOtherPlayers", false);
+	loadBoolConfig(L, EXPERT_PVP_CANWALKTHROUGHMAGICWALLS, "canWalkThroughMagicWalls", false);
+	
 	loadFloatConfig(L, BESTIARY_RATE_CHARM_SHOP_PRICE, "bestiaryRateCharmShopPrice", 1.0);
+	loadFloatConfig(L, COMBAT_CHAIN_SKILL_FORMULA_FIST, "combatChainSkillFormulaFist", 1.0);
 	loadFloatConfig(L, COMBAT_CHAIN_SKILL_FORMULA_AXE, "combatChainSkillFormulaAxe", 0.9);
 	loadFloatConfig(L, COMBAT_CHAIN_SKILL_FORMULA_CLUB, "combatChainSkillFormulaClub", 0.7);
 	loadFloatConfig(L, COMBAT_CHAIN_SKILL_FORMULA_SWORD, "combatChainSkillFormulaSword", 1.1);

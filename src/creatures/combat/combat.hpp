@@ -11,6 +11,7 @@
 
 #include "items/item.hpp"
 #include "lua/global/baseevents.hpp"
+#include "creatures/monsters/monster.hpp"
 
 class Condition;
 class Creature;
@@ -19,6 +20,7 @@ class Player;
 class MatrixArea;
 class Weapon;
 class Tile;
+class Monster;
 
 using CreatureVector = std::vector<std::shared_ptr<Creature>>;
 
@@ -260,6 +262,7 @@ private:
 
 	static void CombatHealthFunc(const std::shared_ptr<Creature> &caster, const std::shared_ptr<Creature> &target, const CombatParams &params, CombatDamage* data);
 	static CombatDamage applyImbuementElementalDamage(const std::shared_ptr<Player> &attackerPlayer, std::shared_ptr<Item> item, CombatDamage damage);
+	static CombatDamage applyWeaponProficiencyDamage(const std::shared_ptr<Player> &attackerPlayer, std::shared_ptr<Item> item, std::shared_ptr<Monster> &targetMonster, CombatDamage damage);
 	static void CombatManaFunc(const std::shared_ptr<Creature> &caster, const std::shared_ptr<Creature> &target, const CombatParams &params, CombatDamage* damage);
 	/**
 	 * @brief Checks if a fear condition can be applied to a player.
@@ -319,7 +322,9 @@ public:
 	CombatType_t getCombatType() const;
 	int32_t getDamage() const;
 	void onStepInField(const std::shared_ptr<Creature> &creature);
+	bool isAggressive(const std::shared_ptr<Player> &player) const;
 
+	PvpMode_t pvpMode = PVP_MODE_DOVE;
 private:
 	int64_t createTime;
 };

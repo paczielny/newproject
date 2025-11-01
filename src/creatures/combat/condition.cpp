@@ -1800,39 +1800,62 @@ bool ConditionDamage::getNextDamage(int32_t &damage) {
 	return false;
 }
 
-bool ConditionDamage::doDamage(const std::shared_ptr<Creature> &creature, int32_t healthChange) const {
-	// Only perform checks and assign attacker if owner is not 0, keeping a const reference to the shared_ptr
-	const auto &attacker = (owner != 0) ? (g_game().getPlayerByGUID(owner) ? g_game().getPlayerByGUID(owner)->getCreature() : g_game().getCreatureByID(owner)) : nullptr;
-	const auto &attackerPlayer = attacker ? attacker->getPlayer() : nullptr;
-	if (creature->isSuppress(getType(), attackerPlayer != nullptr)) {
-		return true;
-	}
-
-	CombatDamage damage;
-	damage.origin = ORIGIN_CONDITION;
-	damage.primary.value = healthChange;
-	damage.primary.type = Combat::ConditionToDamageType(conditionType);
-
-	if (field && creature->getPlayer() && attackerPlayer) {
-		damage.primary.value = static_cast<int32_t>(std::round(damage.primary.value / 2.));
-	}
-
-	if (!creature->isAttackable() || Combat::canDoCombat(attacker, creature, damage.primary.type != COMBAT_HEALING) != RETURNVALUE_NOERROR) {
-		if (!creature->isInGhostMode() && !creature->getNpc()) {
-			g_game().addMagicEffect(creature->getPosition(), CONST_ME_POFF);
-		}
-		return false;
-	}
-
-	if (g_game().combatBlockHit(damage, attacker, creature, false, false, field)) {
-		return false;
-	}
-
-	if (creature && tickSound != SoundEffect_t::SILENCE) {
-		g_game().sendSingleSoundEffect(creature->getPosition(), tickSound, creature);
-	}
-
-	return g_game().combatChangeHealth(attacker, creature, damage);
+bool ConditionDamage::doDamage(const std::shared_ptr<Creature> &creature, int32_t healthChange) const {  
+	// Only perform checks and assign attacker if owner is not 0, keeping a const reference to the shared_ptr  
+	const auto &attacker = (owner != 0) ? (g_game().getPlayerByGUID(owner) ? g_game().getPlayerByGUID(owner)->getCreature() : g_game().getCreatureByID(owner)) : nullptr;  
+	const auto &attackerPlayer = attacker ? attacker->getPlayer() : nullptr;  
+	  
+	// NUEVO: Verificar si es auto-daño  
+	const auto &targetPlayer = creature->getPlayer();  
+	if (attackerPlayer && targetPlayer && attackerPlayer->getGUID() == targetPlayer->getGUID()) {  
+		// Es auto-daño, procesar sin activar pzLocked  
+		CombatDamage damage;  
+		damage.origin = ORIGIN_CONDITION;  
+		damage.primary.value = healthChange;  
+		damage.primary.type = Combat::ConditionToDamageType(conditionType);  
+		  
+		if (field && targetPlayer) {  
+			damage.primary.value = static_cast<int32_t>(std::round(damage.primary.value / 2.));  
+		}  
+		  
+		if (creature && tickSound != SoundEffect_t::SILENCE) {  
+			g_game().sendSingleSoundEffect(creature->getPosition(), tickSound, creature);  
+		}  
+		  
+		// Aplicar daño directamente sin verificaciones de combate, pasando nullptr como attacker  
+		return g_game().combatChangeHealth(nullptr, creature, damage);  
+	}  
+	  
+	// Resto del código existente para daño a otros jugadores  
+	if (creature->isSuppress(getType(), attackerPlayer != nullptr)) {  
+		return true;  
+	}  
+  
+	CombatDamage damage;  
+	damage.origin = ORIGIN_CONDITION;  
+	damage.primary.value = healthChange;  
+	damage.primary.type = Combat::ConditionToDamageType(conditionType);  
+  
+	if (field && creature->getPlayer() && attackerPlayer) {  
+		damage.primary.value = static_cast<int32_t>(std::round(damage.primary.value / 2.));  
+	}  
+  
+	if (!creature->isAttackable() || Combat::canDoCombat(attacker, creature, damage.primary.type != COMBAT_HEALING) != RETURNVALUE_NOERROR) {  
+		if (!creature->isInGhostMode() && !creature->getNpc() && !g_configManager().getBoolean(TOGGLE_EXPERT_PVP)) {  
+			g_game().addMagicEffect(creature->getPosition(), CONST_ME_POFF);  
+		}  
+		return false;  
+	}  
+  
+	if (g_game().combatBlockHit(damage, attacker, creature, false, false, field)) {  
+		return false;  
+	}  
+  
+	if (creature && tickSound != SoundEffect_t::SILENCE) {  
+		g_game().sendSingleSoundEffect(creature->getPosition(), tickSound, creature);  
+	}  
+  
+	return g_game().combatChangeHealth(attacker, creature, damage);  
 }
 
 void ConditionDamage::endCondition(std::shared_ptr<Creature>) {

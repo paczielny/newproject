@@ -169,6 +169,9 @@ bool IOLoginData::loadPlayer(const std::shared_ptr<Player> &player, const DBResu
 		// Load instant spells list
 		IOLoginDataLoad::loadPlayerInstantSpellList(player, result);
 
+		// load weapon proficiency
+		IOLoginDataLoad::loadPlayerWeaponProficiency(player, result);
+
 		if (!disableIrrelevantInfo) {
 			// Load additional data only if the player is online (e.g., forge, bosstiary)
 			loadOnlyDataForOnlinePlayer(player, result);

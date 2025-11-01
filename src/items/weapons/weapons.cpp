@@ -124,6 +124,12 @@ int32_t Weapon::playerWeaponCheck(const std::shared_ptr<Player> &player, const s
 		return 0;
 	}
 
+	// Proficiency Perk: attackRange
+	const uint8_t attackRange = player->getEquippedWeaponProficiency().attackRange;
+	if (attackRange > 0) {
+		shootRange += attackRange;
+	}
+
 	if (std::max<uint32_t>(Position::getDistanceX(playerPos, targetPos), Position::getDistanceY(playerPos, targetPos)) > shootRange) {
 		return 0;
 	}
@@ -592,6 +598,11 @@ bool WeaponMelee::getSkillType(const std::shared_ptr<Player> &player, const std:
 			return true;
 		}
 
+		case WEAPON_FIST: {
+			skill = SKILL_FIST;
+			return true;
+		}
+
 		default:
 			break;
 	}
@@ -804,6 +815,12 @@ bool WeaponDistance::useWeapon(const std::shared_ptr<Player> &player, const std:
 		if (bow && bow->getHitChance() != 0) {
 			chance += bow->getHitChance();
 		}
+	}
+	
+	// Proficiency Perk: rangedHitChance
+	const float rangedHitChance = player->getEquippedWeaponProficiency().rangedHitChance;
+	if (rangedHitChance > 0) {
+		chance += static_cast<int32_t>(std::ceil(chance * rangedHitChance));
 	}
 
 	if (chance >= uniform_random(1, 100)) {

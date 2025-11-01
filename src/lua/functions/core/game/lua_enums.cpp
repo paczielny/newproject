@@ -113,6 +113,7 @@ void LuaEnums::init(lua_State* L) {
 	initWheelEnums(L);
 	initAttributeConditionSubIdEnums(L);
 	initConcoctionsEnum(L);
+	initVirtueEnums(L);
 }
 
 void LuaEnums::initOthersEnums(lua_State* L) {
@@ -217,6 +218,7 @@ void LuaEnums::initOthersEnums(lua_State* L) {
 	registerEnum(L, WEAPON_WAND);
 	registerEnum(L, WEAPON_AMMO);
 	registerEnum(L, WEAPON_MISSILE);
+	registerEnum(L, WEAPON_FIST);
 
 	registerEnum(L, SCREENSHOT_TYPE_NONE);
 	registerEnum(L, SCREENSHOT_TYPE_ACHIEVEMENT);
@@ -430,7 +432,6 @@ void LuaEnums::initConditionParamEnums(lua_State* L) {
 	registerEnum(L, CONDITION_PARAM_INCREASE_MANADRAINPERCENT);
 	registerEnum(L, CONDITION_PARAM_INCREASE_DROWNPERCENT);
 	registerEnum(L, CONDITION_PARAM_CHARM_CHANCE_MODIFIER);
-	registerEnum(L, CONDITION_PARAM_BUFF_HEALINGRECEIVED);
 }
 
 void LuaEnums::initAttributeConditionSubIdEnums(lua_State* L) {
@@ -621,6 +622,38 @@ void LuaEnums::initConstMeEnums(lua_State* L) {
 	registerEnum(L, CONST_ME_SIRUP);
 	registerEnum(L, CONST_ME_CACAO);
 	registerEnum(L, CONST_ME_CANDY_FLOSS);
+	registerEnum(L, CONST_ME_GREEN_HITAREA);
+	registerEnum(L, CONST_ME_RED_HITAREA);
+	registerEnum(L, CONST_ME_BLUE_HITAREA);
+	registerEnum(L, CONST_ME_YELLOW_HITAREA);
+	registerEnum(L, CONST_ME_WHITE_FLURRYOFBLOWS);
+	registerEnum(L, CONST_ME_GREEN_FLURRYOFBLOWS);
+	registerEnum(L, CONST_ME_PINK_FLURRYOFBLOWS);
+	registerEnum(L, CONST_ME_WHITE_ENERGYPULSE);
+	registerEnum(L, CONST_ME_GREEN_ENERGYPULSE);
+	registerEnum(L, CONST_ME_PINK_ENERGYPULSE);
+	registerEnum(L, CONST_ME_WHITE_TIGERCLASH);
+	registerEnum(L, CONST_ME_GREEN_TIGERCLASH);
+	registerEnum(L, CONST_ME_PINK_TIGERCLASH);
+	registerEnum(L, CONST_ME_WHITE_EXPLOSIONHIT);
+	registerEnum(L, CONST_ME_GREEN_EXPLOSIONHIT);
+	registerEnum(L, CONST_ME_BLUE_EXPLOSIONHIT);
+	registerEnum(L, CONST_ME_PINK_EXPLOSIONHIT);
+	registerEnum(L, CONST_ME_WHITE_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_GREEN_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_YELLOW_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_INK_SPLASH);
+	registerEnum(L, CONST_ME_PAPER_PLANE);
+	registerEnum(L, CONST_ME_SPIKES);
+	registerEnum(L, CONST_ME_BLOOD_RAIN);
+	registerEnum(L, CONST_ME_OPEN_BOOKMACHINE);
+	registerEnum(L, CONST_ME_OPEN_BOOKSPELL);
+	registerEnum(L, CONST_ME_SMALL_WHITE_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_SMALL_GREEN_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_SMALL_PINK_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_SMALLWHITE_ENERGY_SPARK);
+	registerEnum(L, CONST_ME_SMALLGREEN_ENERGY_SPARK);
+	registerEnum(L, CONST_ME_SMALLPINK_ENERGY_SPARK);
 }
 
 void LuaEnums::initConstAniEnums(lua_State* L) {
@@ -1218,7 +1251,10 @@ void LuaEnums::initReturnValueEnums(lua_State* L) {
 	registerEnum(L, RETURNVALUE_CONTACTADMINISTRATOR);
 	registerEnum(L, RETURNVALUE_ITEMISNOTYOURS);
 	registerEnum(L, RETURNVALUE_ITEMUNTRADEABLE);
-	registerEnum(L, RETURNVALUE_NOTOWNHIRELING);
+	registerEnum(L, RETURNVALUE_NOTENOUGHHARMONY);
+	registerEnum(L, RETURNVALUE_ADJUSTYOURCOMBAT);
+	registerEnum(L, RETURNVALUE_YOUCANNOTPASSTHROUGHAGGRESSIVEPLAYERS);
+	registerEnum(L, RETURNVALUE_YOUCANNOTPASSTHROUGHAGGRESSIVECREATURES);
 }
 
 // Reload
@@ -1820,4 +1856,11 @@ void LuaEnums::initWheelEnums(lua_State* L) {
 	for (const auto value : magic_enum::enum_values<WheelSpellBoost_t>()) {
 		registerMagicEnumNamespace(L, wheelNamespace, value);
 	}
+}
+
+void LuaEnums::initVirtueEnums(lua_State* L) {
+	registerEnum(L, VIRTUE_NONE);
+	registerEnum(L, VIRTUE_HARMONY);
+	registerEnum(L, VIRTUE_JUSTICE);
+	registerEnum(L, VIRTUE_SUSTAIN);
 }

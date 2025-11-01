@@ -210,6 +210,7 @@ Game::Game() {
 	offlineTrainingWindow.choices.emplace_back("Club Fighting and Shielding", SKILL_CLUB);
 	offlineTrainingWindow.choices.emplace_back("Distance Fighting and Shielding", SKILL_DISTANCE);
 	offlineTrainingWindow.choices.emplace_back("Magic Level and Shielding", SKILL_MAGLEVEL);
+	offlineTrainingWindow.choices.emplace_back("Fist Fighting and Shielding", SKILL_FIST);
 	offlineTrainingWindow.buttons.emplace_back("Okay", 1);
 	offlineTrainingWindow.buttons.emplace_back("Cancel", 0);
 	offlineTrainingWindow.defaultEscapeButton = 1;
@@ -550,7 +551,7 @@ void Game::start(ServiceManager* manager) {
 		EVENT_CHECK_CREATURE_INTERVAL, [this] { checkCreatures(); }, "Game::checkCreatures"
 	);
 	g_dispatcher().cycleEvent(
-		EVENT_IMBUEMENT_INTERVAL, [this] { checkImbuements(); }, "Game::checkImbuements"
+		EVENT_IMBUEMENT_AND_SERENE_STATUS_INTERVAL, [this] { checkImbuementsAndSereneStatus(); }, "Game::checkImbuementsAndSereneStatus"
 	);
 	g_dispatcher().cycleEvent(
 		EVENT_LUA_GARBAGE_COLLECTION, [this] { g_luaEnvironment().collectGarbage(); }, "Calling GC"
@@ -1003,6 +1004,22 @@ std::shared_ptr<Player> Game::getPlayerByID(uint32_t id, bool allowOffline /* = 
 	}
 	tmpPlayer->setOnline(false);
 	return tmpPlayer;
+}
+
+std::shared_ptr<Player> Game::getOwnerPlayer(const std::shared_ptr<Creature> &creature) {
+	if (!creature) {
+		return nullptr;
+	}
+
+	if (creature->isSummon()) {
+		return getOwnerPlayer(creature->getMaster());
+	}
+
+	return creature->getPlayer();
+}
+
+std::shared_ptr<Player> Game::getOwnerPlayer(uint32_t creatureId) {
+	return getOwnerPlayer(getCreatureByID(creatureId));
 }
 
 std::shared_ptr<Creature> Game::getCreatureByName(const std::string &creatureName) {
@@ -1717,7 +1734,7 @@ void Game::playerMoveItem(const std::shared_ptr<Player> &player, const Position 
 		item = thing->getItem();
 	}
 
-	if (item->getID() != itemId) {
+	if (!item || item->getID() != itemId) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
@@ -1784,10 +1801,10 @@ void Game::playerMoveItem(const std::shared_ptr<Player> &player, const Position 
 	}
 
 	const auto toCylinderTile = toCylinder->getTile();
-	const auto &mapToPos = toCylinderTile->getPosition();
+	const Position &mapToPos = toCylinderTile ? toCylinderTile->getPosition() : toPos;
 
 	// hangable item specific code
-	if (item->isHangable() && toCylinderTile->hasFlag(TILESTATE_SUPPORTS_HANGABLE)) {
+	if (item->isHangable() && toCylinderTile && toCylinderTile->hasFlag(TILESTATE_SUPPORTS_HANGABLE)) {
 		// destination supports hangable objects so need to move there first
 		bool vertical = toCylinderTile->hasProperty(CONST_PROP_ISVERTICAL);
 		if (vertical) {
@@ -1879,9 +1896,14 @@ void Game::playerMoveItem(const std::shared_ptr<Player> &player, const Position 
 		const auto fromTile = map.getTile(mapFromPos);
 		const auto toHouseTile = toTile ? toTile->dynamic_self_cast<HouseTile>() : nullptr;
 		const auto fromHouseTile = fromTile ? fromTile->dynamic_self_cast<HouseTile>() : nullptr;
-		if (fromHouseTile && (!toHouseTile || toHouseTile->getHouse()->getId() != fromHouseTile->getHouse()->getId())) {
-			player->sendCancelMessage("You cannot move this item out of this house.");
-			return;
+
+		if (fromHouseTile) {
+			const auto fromHouse = fromHouseTile->getHouse();
+			const auto toHouse = toHouseTile ? toHouseTile->getHouse() : nullptr;
+			if (!fromHouse || !toHouse || toHouse->getId() != fromHouse->getId()) {
+				player->sendCancelMessage("You cannot move this item out of this house.");
+				return;
+			}
 		}
 	}
 
@@ -3292,6 +3314,9 @@ ObjectCategory_t Game::getObjectCategory(const ItemType &it) {
 	ObjectCategory_t category = OBJECTCATEGORY_DEFAULT;
 	if (it.weaponType != WEAPON_NONE) {
 		switch (it.weaponType) {
+			case WEAPON_FIST:
+				category = OBJECTCATEGORY_FISTS;
+				break;
 			case WEAPON_SWORD:
 				category = OBJECTCATEGORY_SWORDS;
 				break;
@@ -3987,8 +4012,10 @@ void Game::playerUseItem(uint32_t playerId, const Position &pos, uint8_t stackPo
 				}
 				return;
 			}
+
 			ret = RETURNVALUE_THEREISNOWAY;
 		}
+
 		player->sendCancelMessage(ret);
 		return;
 	}
@@ -3997,6 +4024,7 @@ void Game::playerUseItem(uint32_t playerId, const Position &pos, uint8_t stackPo
 	if (canTriggerExhaustion) {
 		canDoAction = player->canDoPotionAction();
 	}
+
 	if (!canDoAction) {
 		uint32_t delay = player->getNextActionTime();
 		if (canTriggerExhaustion) {
@@ -4891,9 +4919,16 @@ void Game::playerStashWithdraw(uint32_t playerId, uint16_t itemId, uint32_t coun
 		count = maxWithdrawLimit;
 	}
 
+	const uint32_t previousStashCount = player->getStashItemCount(itemId);
 	auto ret = player->addItemFromStash(itemId, count);
 	if (ret != RETURNVALUE_NOERROR) {
-		g_logger().warn("[{}] failed to retrieve item: {}, to player: {}, from the stash", __FUNCTION__, itemId, player->getName());
+		g_logger().warn("[{}] failed to retrieve item: {}, count {}, to player: {}, from the stash", __FUNCTION__, itemId, count, player->getName());
+		const uint32_t currentStashCount = player->getStashItemCount(itemId);
+		if (currentStashCount < previousStashCount) {
+			const uint32_t diff = previousStashCount - currentStashCount;
+			player->addItemOnStash(itemId, diff);
+			g_logger().warn("[{}] corrected stash count for item: {}, count {}, to player: {}, from the stash", __FUNCTION__, itemId, diff, player->getName());
+		}
 		player->sendCancelMessage(ret);
 	}
 
@@ -4978,10 +5013,21 @@ void Game::playerRequestTrade(uint32_t playerId, const Position &pos, uint8_t st
 	}
 
 	std::shared_ptr<Item> tradeItem = tradeThing->getItem();
+	if (!tradeItem) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
 	if (tradeItem->getID() != itemId || !tradeItem->isPickupable() || tradeItem->hasAttribute(ItemAttribute_t::UNIQUEID)) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
+
+	if (tradeItem->isRemoved() || !tradeItem->getParent()) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
 	if (tradeItem->isStoreItem() || tradeItem->hasOwner()) {
 		player->sendCancelMessage(RETURNVALUE_ITEMUNTRADEABLE);
 		return;
@@ -6147,7 +6193,7 @@ void Game::playerFollowCreature(uint32_t playerId, uint32_t creatureId) {
 	player->setFollowCreature(getCreatureByID(creatureId));
 }
 
-void Game::playerSetFightModes(uint32_t playerId, FightMode_t fightMode, bool chaseMode, bool secureMode) {
+void Game::playerSetFightModes(uint32_t playerId, FightMode_t fightMode, PvpMode_t pvpMode, bool chaseMode, bool secureMode) {
 	const auto &player = getPlayerByID(playerId);
 	if (!player) {
 		return;
@@ -6155,7 +6201,43 @@ void Game::playerSetFightModes(uint32_t playerId, FightMode_t fightMode, bool ch
 
 	player->setFightMode(fightMode);
 	player->setChaseMode(chaseMode);
-	player->setSecureMode(secureMode);
+
+	bool expertPvpActive = g_configManager().getBoolean(TOGGLE_EXPERT_PVP) || (worldType == WORLD_TYPE_PVP_ENFORCED);
+	if (expertPvpActive) {
+		auto oldPvpMode = player->pvpMode;
+
+		// In Hardcore worlds, force Red Fist mode and disable secure mode
+		if (worldType == WORLD_TYPE_PVP_ENFORCED) {
+			player->setPvpMode(PVP_MODE_RED_FIST);
+			player->setSecureMode(false);
+		} else {
+			// Black skull cannot activate Red Fist
+			if (player->getSkull() == SKULL_BLACK && pvpMode == PVP_MODE_RED_FIST) {
+				player->setPvpMode(oldPvpMode);
+			} else if (worldType == WORLD_TYPE_NO_PVP && pvpMode == PVP_MODE_RED_FIST) {
+				player->setPvpMode(player->pvpMode);
+			} else {
+				player->setPvpMode(pvpMode);
+			}
+
+			if (worldType == WORLD_TYPE_NO_PVP && !secureMode) {
+				player->setSecureMode(!secureMode);
+			} else {
+				if (player->getPvPMode() == PVP_MODE_RED_FIST && oldPvpMode != PVP_MODE_RED_FIST) {
+					player->setSecureMode(false);
+				} else if (player->pvpMode != PVP_MODE_RED_FIST && oldPvpMode == PVP_MODE_RED_FIST) {
+					player->setSecureMode(true);
+				} else {
+					player->setSecureMode(secureMode);
+				}
+			}
+		}
+
+		player->sendFightModes();
+	} else {
+		player->setPvpMode(pvpMode);
+		player->setSecureMode(secureMode);
+	}
 }
 
 void Game::playerRequestAddVip(uint32_t playerId, const std::string &name) {
@@ -6216,7 +6298,7 @@ void Game::playerRequestEditVip(uint32_t playerId, uint32_t guid, const std::str
 	player->vip().edit(guid, description, icon, notify, vipGroupsId);
 }
 
-void Game::playerApplyImbuement(uint32_t playerId, uint16_t imbuementid, uint8_t slot, bool protectionCharm) {
+void Game::playerApplyImbuement(uint32_t playerId, uint16_t imbuementid, uint8_t slot) {
 	const auto &player = getPlayerByID(playerId);
 	if (!player) {
 		return;
@@ -6243,13 +6325,13 @@ void Game::playerApplyImbuement(uint32_t playerId, uint16_t imbuementid, uint8_t
 		return;
 	}
 
-	if (item->getTopParent() != player) {
+	if (item->getTopParent() != player && item->getID() != ITEM_BLANK_IMBUEMENT_SCROLL) {
 		g_logger().error("[Game::playerApplyImbuement] - An error occurred while player with name {} try to apply imbuement", player->getName());
 		player->sendImbuementResult("An error has occurred, reopen the imbuement window. If the problem persists, contact your administrator.");
 		return;
 	}
 
-	player->onApplyImbuement(imbuement, item, slot, protectionCharm);
+	player->onApplyImbuement(imbuement, item, slot);
 }
 
 void Game::playerClearImbuement(uint32_t playerid, uint8_t slot) {
@@ -7330,6 +7412,11 @@ void Game::applyWheelOfDestinyHealing(CombatDamage &damage, const std::shared_pt
 		if (attackerPlayer->wheel().getInstant("Blessing of the Grove")) {
 			damage.primary.value += (damage.primary.value * attackerPlayer->wheel().checkBlessingGroveHealingByTarget(target)) / 100.;
 		}
+
+		if (attackerPlayer->wheel().getInstant(WheelInstant_t::SANCTUARY)) {
+			const float sanctuaryBonus = attackerPlayer->wheel().checkRevelationPerkSanctuary();
+			damage.primary.value = static_cast<int32_t>(std::round(damage.primary.value * sanctuaryBonus));
+		}
 	}
 }
 
@@ -7370,6 +7457,22 @@ void Game::applyWheelOfDestinyEffectsToDamage(CombatDamage &damage, const std::s
 				damage.secondary.value += (damage.secondary.value * damageBonus) / 100.;
 			}
 		}
+
+		if (attackerPlayer->wheel().getStage(WheelStage_t::ASCETIC) > 0) {
+			int32_t damageBonus = attackerPlayer->wheel().checkRevelationPerkAscetic();
+			if (damageBonus != 0) {
+				damage.primary.value += damageBonus;
+				if (damage.secondary.value != 0) {
+					damage.secondary.value += damageBonus;
+				}
+			}
+		}
+
+		if (attackerPlayer->wheel().getInstant(WheelInstant_t::SANCTUARY)) {
+			const float sanctuaryBonus = attackerPlayer->wheel().checkRevelationPerkSanctuary();
+			damage.primary.value = static_cast<int32_t>(std::round(damage.primary.value * sanctuaryBonus));
+			damage.secondary.value = static_cast<int32_t>(std::round(damage.secondary.value * sanctuaryBonus));
+		}
 	}
 }
 
@@ -7388,6 +7491,23 @@ int32_t Game::applyHealthChange(const CombatDamage &damage, const std::shared_pt
 		}
 	}
 	return targetHealth;
+}
+
+static void applyImproveMonkHealing(CombatDamage &damage, const std::shared_ptr<Player> &player) {
+	if (!player) {
+		return;
+	}
+
+	if (damage.primary.type != COMBAT_HEALING) {
+		return;
+	}
+
+	if (player->getVirtue() == VIRTUE_SUSTAIN && !(damage.instantSpellName).empty()) {
+		const uint8_t virtueSustainBonusPercent = (player->isSerene() ? 70 : 35);
+		const float multiplier = 1.0f + (virtueSustainBonusPercent / 100.0f);
+
+		damage.primary.value = static_cast<int32_t>(damage.primary.value * multiplier);
+	}
 }
 
 bool Game::combatChangeHealth(const std::shared_ptr<Creature> &attacker, const std::shared_ptr<Creature> &target, CombatDamage &damage, bool isEvent /*= false*/) {
@@ -7421,8 +7541,9 @@ bool Game::combatChangeHealth(const std::shared_ptr<Creature> &attacker, const s
 			}
 		}
 
-		// Wheel of destiny combat healing
+		// Wheel of destiny combat healing and Monk Virtue of Sustain
 		applyWheelOfDestinyHealing(damage, attackerPlayer, target);
+		applyImproveMonkHealing(damage, attackerPlayer);
 
 		auto realHealthChange = target->getHealth();
 		target->gainHealth(attacker, damage.primary.value);
@@ -8426,13 +8547,30 @@ void Game::addDistanceEffect(const CreatureVector &spectators, const Position &f
 	}
 }
 
-void Game::checkImbuements() const {
+void Game::checkImbuementsAndSereneStatus() {
 	for (const auto &[mapPlayerId, mapPlayer] : getPlayers()) {
 		if (!mapPlayer) {
 			continue;
 		}
 
 		mapPlayer->updateInventoryImbuement();
+		if (mapPlayer->getVocation()->getBaseId() != 5) {
+			continue;
+		}
+
+		if (mapPlayer->getSereneCooldown() > 0) {
+			mapPlayer->setSerene(true);
+			continue;
+		}
+
+		const auto &party = mapPlayer->getParty();
+		bool hasNearbyPartyMembers = party ? hasPartyMembersNearby(mapPlayer) : false;
+		bool hasLessThanSixMonsters = isPlayerNoBoxed(mapPlayer);
+
+		bool condition1 = !party || !hasNearbyPartyMembers;
+		bool condition2 = hasLessThanSixMonsters;
+
+		mapPlayer->setSerene(condition1 && condition2);
 	}
 }
 
@@ -8587,12 +8725,6 @@ void Game::updateCreatureSkull(const std::shared_ptr<Creature> &creature) const 
 	}
 }
 
-void Game::updateCreatureSquare(const std::shared_ptr<Creature> &creature) const {  
-    for (const auto &spectator : Spectators().find<Player>(creature->getPosition(), true)) {  
-        spectator->getPlayer()->sendCreatureSquare(creature, spectator->getPlayer()->getSquareClient(creature));  
-    }  
-}
-
 void Game::updatePlayerShield(const std::shared_ptr<Player> &player) {
 	for (const auto &spectator : Spectators().find<Player>(player->getPosition(), true)) {
 		spectator->getPlayer()->sendCreatureShield(player);
@@ -8720,6 +8852,16 @@ void Game::playerInviteToParty(uint32_t playerId, uint32_t invitedId) {
 		return;
 	}
 
+	if (player->isInPvpSituation()) {
+		player->sendTextMessage(MESSAGE_PARTY_MANAGEMENT, "You can't invite players while you are in an aggression.");
+		return;
+	}
+
+	if (invitedPlayer->isInPvpSituation()) {
+		player->sendTextMessage(MESSAGE_PARTY_MANAGEMENT, "This player can't be invited while he is in an aggression.");
+		return;
+	}
+
 	std::shared_ptr<Party> party = player->getParty();
 	if (!party) {
 		party = Party::create(player);
@@ -8741,6 +8883,16 @@ void Game::updatePlayerHelpers(const std::shared_ptr<Player> &player) {
 	}
 }
 
+void Game::updateCreatureSquare(const std::shared_ptr<Creature> &creature) {
+	if (!g_configManager().getBoolean(TOGGLE_EXPERT_PVP)) {
+		return;
+	}
+
+	for (const auto &spectator : Spectators().find<Player>(creature->getPosition(), true)) {
+		spectator->getPlayer()->sendCreatureSquare(creature, spectator->getPlayer()->getCreatureSquare(creature), SQUARE_STAY);
+	}
+}
+
 void Game::playerJoinParty(uint32_t playerId, uint32_t leaderId) {
 	const auto &player = getPlayerByID(playerId);
 	if (!player) {
@@ -8754,6 +8906,11 @@ void Game::playerJoinParty(uint32_t playerId, uint32_t leaderId) {
 
 	auto party = leader->getParty();
 	if (!party || party->getLeader() != leader) {
+		return;
+	}
+
+	if (player->isInPvpSituation()) {
+		player->sendTextMessage(MESSAGE_PARTY_MANAGEMENT, "You can't join while you are in an aggression.");
 		return;
 	}
 
@@ -8992,19 +9149,16 @@ std::string Game::generateHighscoreQuery(
 	return query;
 }
 
-std::string Game::generateVocationConditionHighscore(uint32_t vocation) {
+std::string Game::generateVocationConditionHighscore(uint32_t searchVocationBaseId) {
 	std::ostringstream queryPart;
-	bool firstVocation = true;
 
 	const auto vocationsMap = g_vocations().getVocations();
-	for (const auto &it : vocationsMap) {
-		const auto &voc = it.second;
-		if (voc->getFromVocation() == vocation) {
-			if (firstVocation) {
-				queryPart << " WHERE `vocation` = " << voc->getId();
-				firstVocation = false;
+	for (const auto &[currentVocationId, vocationPtr] : vocationsMap) {
+		if (vocationPtr->getBaseId() == searchVocationBaseId) {
+			if (vocationPtr->getFromVocation() == static_cast<uint32_t>(currentVocationId)) {
+				queryPart << " WHERE `vocation` = " << currentVocationId;
 			} else {
-				queryPart << " OR `vocation` = " << voc->getId();
+				queryPart << " OR `vocation` = " << currentVocationId;
 			}
 		}
 	}
@@ -9306,19 +9460,21 @@ void Game::playerBrowseMarketOwnHistory(uint32_t playerId) {
 namespace {
 	bool removeOfferItems(const std::shared_ptr<Player> &player, const std::shared_ptr<DepotLocker> &depotLocker, const ItemType &itemType, uint16_t amount, uint8_t tier, std::ostringstream &offerStatus) {
 		uint16_t removeAmount = amount;
-		if (
-			// Init-statement
-			auto stashItemCount = player->getStashItemCount(itemType.wareId);
-			// Condition
-			stashItemCount > 0
-		) {
-			if (removeAmount > stashItemCount && player->withdrawItem(itemType.wareId, stashItemCount)) {
-				removeAmount -= stashItemCount;
-			} else if (player->withdrawItem(itemType.wareId, removeAmount)) {
-				removeAmount = 0;
-			} else {
-				offerStatus << "Failed to remove stash items from player " << player->getName();
-				return false;
+		if (tier == 0) {
+			if (
+				// Init-statement
+				auto stashItemCount = player->getStashItemCount(itemType.wareId);
+				// Condition
+				stashItemCount > 0
+			) {
+				if (removeAmount > stashItemCount && player->withdrawItem(itemType.wareId, stashItemCount)) {
+					removeAmount -= stashItemCount;
+				} else if (player->withdrawItem(itemType.wareId, removeAmount)) {
+					removeAmount = 0;
+				} else {
+					offerStatus << "Failed to remove stash items from player " << player->getName();
+					return false;
+				}
 			}
 		}
 
@@ -9465,6 +9621,15 @@ void Game::playerCreateMarketOffer(uint32_t playerId, uint8_t type, uint16_t ite
 		return;
 	}
 
+	const uint8_t maxTier = static_cast<uint8_t>(g_configManager().getNumber(FORGE_MAX_ITEM_TIER));
+	if (tier > maxTier) {
+		tier = maxTier;
+	}
+
+	if (tier > 0 && it.upgradeClassification == 0) {
+		tier = 0;
+	}
+
 	uint64_t totalPrice = price * amount;
 	uint64_t totalFee = totalPrice * 0.02; // 2% fee
 	uint64_t minFee = 20; // Min fee is 20gp
@@ -9577,6 +9742,10 @@ void Game::playerCancelMarketOffer(uint32_t playerId, uint32_t timestamp, uint16
 			return;
 		}
 
+		const uint8_t maxTier = static_cast<uint8_t>(g_configManager().getNumber(FORGE_MAX_ITEM_TIER));
+		const uint8_t offerTier = it.upgradeClassification > 0 ? std::min<uint8_t>(offer.tier, maxTier) : 0;
+		offer.tier = offerTier;
+
 		if (it.id == ITEM_STORE_COIN) {
 			// Do not register a transaction for coins upon cancellation
 			player->getAccount()->addCoins(CoinType::Transferable, offer.amount, "");
@@ -9590,8 +9759,8 @@ void Game::playerCancelMarketOffer(uint32_t playerId, uint32_t timestamp, uint16
 					break;
 				}
 
-				if (offer.tier > 0) {
-					item->setAttribute(ItemAttribute_t::TIER, offer.tier);
+				if (offerTier > 0) {
+					item->setTier(offerTier);
 				}
 
 				tmpAmount -= stackCount;
@@ -9610,8 +9779,8 @@ void Game::playerCancelMarketOffer(uint32_t playerId, uint32_t timestamp, uint16
 					break;
 				}
 
-				if (offer.tier > 0) {
-					item->setAttribute(ItemAttribute_t::TIER, offer.tier);
+				if (offerTier > 0) {
+					item->setTier(offerTier);
 				}
 			}
 		}
@@ -9658,6 +9827,10 @@ void Game::playerAcceptMarketOffer(uint32_t playerId, uint32_t timestamp, uint16
 		offerStatus << "Failed to load item id";
 		return;
 	}
+
+	const uint8_t maxTier = static_cast<uint8_t>(g_configManager().getNumber(FORGE_MAX_ITEM_TIER));
+	const uint8_t offerTier = it.upgradeClassification > 0 ? std::min<uint8_t>(offer.tier, maxTier) : 0;
+	offer.tier = offerTier;
 
 	if (amount == 0 || (!it.stackable && amount > 2000) || (it.stackable && amount > 64000) || amount > offer.amount) {
 		offerStatus << "Invalid offer amount " << amount << " for player " << player->getName();
@@ -9716,7 +9889,7 @@ void Game::playerAcceptMarketOffer(uint32_t playerId, uint32_t timestamp, uint16
 				"Sold on Market"
 			);
 		} else {
-			if (!removeOfferItems(player, depotLocker, it, amount, offer.tier, offerStatus)) {
+			if (!removeOfferItems(player, depotLocker, it, amount, offerTier, offerStatus)) {
 				g_logger().error("[{}] failed to remove item with id {}, from player {}, errorcode: {}", __FUNCTION__, it.id, player->getName(), offerStatus.str());
 				return;
 			}
@@ -9878,7 +10051,7 @@ void Game::playerAnswerModalWindow(uint32_t playerId, uint32_t modalWindowId, ui
 	// offline training, hardcoded
 	if (modalWindowId == std::numeric_limits<uint32_t>::max()) {
 		if (button == 1) {
-			if (choice == SKILL_SWORD || choice == SKILL_AXE || choice == SKILL_CLUB || choice == SKILL_DISTANCE || choice == SKILL_MAGLEVEL) {
+			if (choice == SKILL_SWORD || choice == SKILL_AXE || choice == SKILL_CLUB || choice == SKILL_DISTANCE || choice == SKILL_MAGLEVEL || choice == SKILL_FIST) {
 				auto bedItem = player->getBedItem();
 				if (bedItem && bedItem->sleep(player)) {
 					player->setOfflineTrainingSkill(static_cast<int8_t>(choice));
@@ -11524,7 +11697,7 @@ void Game::playerCyclopediaHouseMoveOut(uint32_t playerId, uint32_t houseId, uin
 
 	std::shared_ptr<Player> player = getPlayerByID(playerId);
 	if (!player) {
-		player->sendHouseAuctionMessage(houseId, HouseAuctionType::MoveOut, enumToValue(TransferErrorMessage::Internal));
+		g_logger().warn("[{}] Player {} not found while handling house auction request.", __FUNCTION__, playerId);
 		return;
 	}
 
@@ -11553,7 +11726,7 @@ void Game::playerCyclopediaHouseCancelMoveOut(uint32_t playerId, uint32_t houseI
 
 	std::shared_ptr<Player> player = getPlayerByID(playerId);
 	if (!player) {
-		player->sendHouseAuctionMessage(houseId, HouseAuctionType::CancelMoveOut, enumToValue(TransferErrorMessage::Internal));
+		g_logger().warn("[{}] Player {} not found while handling house auction request.", __FUNCTION__, playerId);
 		return;
 	}
 
@@ -11582,7 +11755,7 @@ void Game::playerCyclopediaHouseTransfer(uint32_t playerId, uint32_t houseId, ui
 
 	const std::shared_ptr<Player> &owner = getPlayerByID(playerId);
 	if (!owner) {
-		owner->sendHouseAuctionMessage(houseId, HouseAuctionType::Transfer, enumToValue(TransferErrorMessage::Internal));
+		g_logger().warn("[{}] Player {} not found while handling house auction request.", __FUNCTION__, playerId);
 		return;
 	}
 
@@ -11621,7 +11794,7 @@ void Game::playerCyclopediaHouseCancelTransfer(uint32_t playerId, uint32_t house
 
 	const std::shared_ptr<Player> &player = getPlayerByID(playerId);
 	if (!player) {
-		player->sendHouseAuctionMessage(houseId, HouseAuctionType::CancelTransfer, enumToValue(TransferErrorMessage::Internal));
+		g_logger().warn("[{}] Player {} not found while handling house auction request.", __FUNCTION__, playerId);
 		return;
 	}
 
@@ -11665,7 +11838,7 @@ void Game::playerCyclopediaHouseAcceptTransfer(uint32_t playerId, uint32_t house
 
 	const std::shared_ptr<Player> &player = getPlayerByID(playerId);
 	if (!player) {
-		player->sendHouseAuctionMessage(houseId, HouseAuctionType::AcceptTransfer, enumToValue(AcceptTransferErrorMessage::Internal));
+		g_logger().warn("[{}] Player {} not found while handling house auction request.", __FUNCTION__, playerId);
 		return;
 	}
 
@@ -11699,7 +11872,7 @@ void Game::playerCyclopediaHouseRejectTransfer(uint32_t playerId, uint32_t house
 
 	const std::shared_ptr<Player> &player = getPlayerByID(playerId);
 	if (!player) {
-		player->sendHouseAuctionMessage(houseId, HouseAuctionType::Transfer, enumToValue(TransferErrorMessage::Internal));
+		g_logger().warn("[{}] Player {} not found while handling house auction request.", __FUNCTION__, playerId);
 		return;
 	}
 
@@ -11757,6 +11930,87 @@ bool Game::processBankAuction(std::shared_ptr<Player> player, const std::shared_
 		} else {
 			otherPlayer->setBankBalance(otherPlayer->getBankBalance() + (house->getBidHolderLimit() + house->getRent()));
 			otherPlayer->sendResourceBalance(RESOURCE_BANK, otherPlayer->getBankBalance());
+		}
+	}
+
+	return true;
+}
+
+bool Game::hasPartyMembersNearby(const std::shared_ptr<Player> &player) {
+	if (!player) {
+		return false;
+	}
+
+	const auto &party = player->getParty();
+	if (!party) {
+		return false;
+	}
+
+	const Position &centerPos = player->getPosition();
+	for (int offsetX = -3; offsetX <= 3; ++offsetX) {
+		for (int offsetY = -3; offsetY <= 3; ++offsetY) {
+			if (offsetX == 0 && offsetY == 0) {
+				continue;
+			}
+
+			const auto &tile = g_game().map.getTile(static_cast<uint16_t>(centerPos.x + offsetX), static_cast<uint16_t>(centerPos.y + offsetY), centerPos.z);
+			if (!tile) {
+				continue;
+			}
+
+			const auto &topCreature = tile->getTopCreature();
+			if (!topCreature) {
+				continue;
+			}
+
+			const auto &nearbyPlayer = topCreature->getPlayer();
+			if (nearbyPlayer && nearbyPlayer != player) {
+				if (nearbyPlayer->getParty() == party) {
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+bool Game::isPlayerNoBoxed(const std::shared_ptr<Player> &player) {
+	if (!player) {
+		return true;
+	}
+
+	const Position &centerPos = player->getPosition();
+	uint8_t monsterCount = 0;
+
+	for (int offsetX = -1; offsetX <= 1; ++offsetX) {
+		for (int offsetY = -1; offsetY <= 1; ++offsetY) {
+			if (offsetX == 0 && offsetY == 0) {
+				continue;
+			}
+
+			const auto &tile = g_game().map.getTile(static_cast<uint16_t>(centerPos.x + offsetX), static_cast<uint16_t>(centerPos.y + offsetY), centerPos.z);
+			if (!tile) {
+				continue;
+			}
+
+			const auto &topCreature = tile->getTopCreature();
+			if (!topCreature || topCreature == player) {
+				continue;
+			}
+
+			if (topCreature->getMaster() && topCreature->getMaster()->getPlayer() == player) {
+				continue;
+			}
+
+			// Ignore other players (including party members)
+			if (topCreature->getPlayer()) {
+				continue;
+			}
+
+			if (++monsterCount >= 6) {
+				return false;
+			}
 		}
 	}
 

@@ -535,7 +535,8 @@ uint32_t MoveEvent::EquipItem(const std::shared_ptr<MoveEvent> &moveEvent, const
 		return 1;
 	}
 
-	const ItemType &it = Item::items[item->getID()];
+	const uint16_t itemId = item->getID();
+	const ItemType &it = Item::items[itemId];
 	if (it.transformEquipTo != 0) {
 		g_game().transformItem(item, it.transformEquipTo);
 	}
@@ -621,6 +622,12 @@ uint32_t MoveEvent::EquipItem(const std::shared_ptr<MoveEvent> &moveEvent, const
 		player->setMainBackpackUnassigned(item->getContainer());
 	}
 
+	// Weapon Proficiency
+	if (slot == CONST_SLOT_LEFT || slot == CONST_SLOT_RIGHT) {
+		player->sendWeaponProficiencyExperience(itemId, 0);
+		player->applyEquippedWeaponProficiency(itemId);
+	}
+
 	player->sendStats();
 	player->sendSkills();
 	return 1;
@@ -642,7 +649,9 @@ uint32_t MoveEvent::DeEquipItem(const std::shared_ptr<MoveEvent> &, const std::s
 		return 1;
 	}
 
-	const ItemType &it = Item::items[item->getID()];
+	const uint16_t itemId = item->getID();
+
+	const ItemType &it = Item::items[itemId];
 	player->setItemAbility(slot, false);
 
 	for (uint8_t slotid = 0; slotid < item->getImbuementSlot(); slotid++) {
@@ -705,6 +714,11 @@ uint32_t MoveEvent::DeEquipItem(const std::shared_ptr<MoveEvent> &, const std::s
 
 	if (it.transformDeEquipTo != 0) {
 		g_game().transformItem(item, it.transformDeEquipTo);
+	}
+
+	//  Weapon Proficiency
+	if (slot == CONST_SLOT_LEFT || slot == CONST_SLOT_RIGHT) {
+		player->removeEquippedWeaponProficiency(itemId);
 	}
 
 	player->sendStats();
